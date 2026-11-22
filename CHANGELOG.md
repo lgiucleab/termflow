@@ -4,6 +4,33 @@ All notable changes to this project. Format: Keep a Changelog; versions follow S
 
 ## [Unreleased]
 
+### Changed (M2d — OpenCode-style UI)
+- **New look**, modelled on OpenCode's GUI (MIT), still Mono by default:
+  - floating raised panels on a darker window layer
+  - Inter for the UI and IBM Plex Mono for code
+  - a 36px title bar with the project and a command search
+  - two-line session rows (mode · model · time) in a resizable sidebar (⌘⇧B / Ctrl+Shift+B)
+- **Timeline:**
+  - tool calls are one-line rows that expand on click
+  - back-to-back reads, greps and globs collapse into "Explored N files"
+  - thinking is a collapsed row
+  - user messages are right-aligned bubbles
+  - errors and route switches are notice rows
+- **Composer:**
+  - a raised card that grows up to 180px
+  - Build/Plan agent switch (a filled or hollow dot), model chip with a picker popover, command/agent glyph, and a send/stop/run button
+  - a todo pill when the agent has a plan
+- **Permission requests** dock above the composer (Deny with feedback / Deny / Allow for session / Allow once) instead of sitting inside the tool card.
+- **Right panel** (⌘⇧R / Ctrl+Shift+R) with the agent's Todo list and the Context attached to your next message.
+- **The classic terminal** (⌘J) is now a resizable bottom panel. Without shell integration it fills the session.
+- **Settings** is a full-screen page (⌘,):
+  - Appearance: theme cards and timeline detail (Everything / Compact / Messages only)
+  - Providers (moved out of the dialog)
+  - Shortcuts
+  - About
+- **Command palette:** grouped results; ⌘⇧P also opens it.
+- The status bar is gone: shell state shows in the session header, and Providers and the palette are in the title bar.
+
 ### Added (M3a — Router with fallback)
 - **Fallback profiles** (`[profiles.<name>]`): a chat can follow an ordered chain of models across providers or your own distinct keys. Rate limits wait or move on, quota exhaustion moves on at once (blocked until the reset, remembered across restarts), outages retry with backoff then move on, oversized requests go to `on_context_overflow` or have old tool output trimmed, and refusals go to `on_content_policy`.
 - A failure mid-answer continues on the next model without retyping; tools that already ran are never run again.

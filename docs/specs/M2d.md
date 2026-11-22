@@ -1,6 +1,6 @@
 # M2d — OpenCode-style UI refresh (plan, awaiting approval)
 
-Branch: `m2d-opencode-ui` (from `m3-router`). Status: **APPROVED (owner, 2026-11-22) — in progress.**
+Branch: `m2d-opencode-ui` (from `m3-router`). Status: **BUILT (2026-11-23)** — UI checks green; Tauri window check pending (manual checklist).
 
 **Owner answers:** keep **Mono as the default** (decision 0002 stands; OpenCode's grey ramp is used, the accent is white/black, and Build/Plan tags are shown with greys and glyphs, not colour) · bundle **Inter + IBM Plex Mono** · M2d goes **before M3b** · Part B is approved as written.
 Request (owner, 2026-11-22): take OpenCode's GUI look and its core features into TermFlow; refactor the whole UI to look modern and professional, like OpenCode.
@@ -128,3 +128,33 @@ Each of M4 and v1 gets its own spec as usual. This milestone gives every one of 
 4. Composer + suggestions + permission dock + todo pill.
 5. Palette, settings page, start/new-session screens.
 6. Keybindings, `/init`, docs, CHANGELOG.
+
+## As built (2026-11-23)
+- **Tokens** (`styles/tokens.css`, `themes.ts`):
+  - `Theme.ui` gained `deep`, `faint` and `warning`.
+  - Hover, pressed and strong-border values, diff backgrounds and the three shadow levels are derived in CSS with `color-mix`, so every theme gets them for free.
+  - Mono Dark now uses OpenCode's grey ramp (`#080808` window, `#161616` panels).
+  - Tests check that every theme has every token, that terminal bg = panel bg, and Mono AA contrast.
+- **Fonts:** `@fontsource-variable/inter` 5.3.0 and `@fontsource/ibm-plex-mono` 5.3.0 (both OFL). JetBrains Mono stays the terminal font.
+- **Layout** (`stores/layout.ts`):
+  - Sidebar 136–640px, right panel 320–640px, bottom terminal ≥120px and ≤70% of the session.
+  - Sizes, open state and density are kept in localStorage (each access wrapped in try/catch).
+  - `ResizeHandle` works with mouse and arrow keys.
+- **Timeline:**
+  - `group.ts` (tested) collapses runs of 2+ `read`/`grep`/`glob`/`ls` calls.
+  - `ToolCard.tsx` renders rows, `ExploreRow` and `Diff`.
+  - `PermissionDock.tsx` replaces the inline approval card.
+  - Density hides thinking rows (Compact) or tool and thinking rows (Messages only) with CSS.
+- **Composer:** the model/profile/credential controls moved from the old header into a popover on the model chip. `/model` opens it.
+- **Settings** (`features/settings/Settings.tsx`):
+  - Providers is now `ProvidersPanel`, and `setProvidersOpen(true)` opens that page.
+  - The General page was dropped: nothing would be on it yet.
+- **Keybindings:** `toggleSidebar`, `toggleRight` and `settings` added, plus ⌘⇧P for the palette. `ACTIONS` drives the Shortcuts page.
+- **Credit:** OpenCode is credited in Settings › About and in the CHANGELOG. No OpenCode source file was copied, only design values and layout, so no extra licence file is needed.
+- **Visual check:** done in a browser with a throwaway fake bridge (not committed), at dark/light, populated/empty and start screen. The real Tauri window is in the manual checklist.
+
+### Known issues
+- `/init` already existed (M2b), so no new work was needed there.
+- Biome reports 5 `noDescendingSpecificity` warnings in `app.css` (warnings only; lint passes).
+- In Mono Light the panel shadows are a little heavy. They could get lighter values per theme later.
+- The title bar is a normal bar inside the native window frame (`data-tauri-drag-region` is set, but decorations are unchanged). A frameless window is a separate decision.

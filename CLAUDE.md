@@ -63,8 +63,9 @@ Untestable-here behaviour goes in `docs/MANUAL_TEST_CHECKLIST.md`.
 - `crates/termflow-{mcp,acp,sandbox,worktrees,daemon}`, `apps/cli` — v1 stubs
 - `apps/desktop/src-tauri` — Tauri glue only
 - `apps/desktop/ui/src/bridge` — the only code that calls Tauri; `generated/` is tauri-specta output
-- `apps/desktop/ui/src/features/chat` — unified timeline: `ChatView`, `chatShell` (shell per chat, live/frozen blocks), `splitter` (OSC/alt-screen), `classify` (command vs question)
+- `apps/desktop/ui/src/features/chat` — unified timeline: `ChatView`, `chatShell` (shell per chat, live/frozen blocks), `splitter` (OSC/alt-screen), `classify` (command vs question), `ToolCard` (rows), `group` (explore runs), `PermissionDock`, `RightPanel`
+- `apps/desktop/ui/src/features/settings` — full-screen Settings page; `stores/layout.ts` — panel sizes/toggles; `styles/tokens.css` — OpenCode-style token layers (M2d)
 
 ## Status
-Current milestone: **M3 — Router with fallback** (`docs/specs/M3.md`): M3a (router core) built; M3b (switch UX) next. M0–M2c done.
+Current milestone: **M3 — Router with fallback** (`docs/specs/M3.md`): M3a (router core) built; **M2d (OpenCode-style UI, `docs/specs/M2d.md`) built on `m2d-opencode-ui`**; M3b (switch UX) next, reusing M2d's notice rows and model chip. M0–M2c done.
 Known issues: see the spec's "Known issues" section.

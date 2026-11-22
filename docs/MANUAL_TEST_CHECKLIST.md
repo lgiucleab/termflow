@@ -72,3 +72,14 @@ Setup: two providers (e.g. Anthropic + OpenAI) and a profile in `~/.config/termf
 - [ ] Only invalid keys in the profile: the "All models in this profile are unavailable" banner lists each one.
 - [ ] With no provider configured, no request goes to models.dev (check with a proxy); after adding one, the catalog loads (log: `model catalog loaded`).
 - [ ] Picking a model in the header pins it (the profile picker shows "Pinned model").
+
+## M2d — OpenCode-style UI (Tauri window, macOS + Windows)
+- [ ] The window shows a 36px title bar, the sidebar, and a raised session panel with 8px gutters. There's no status bar.
+- [ ] Drag the sidebar edge: it stops at 136px and 640px. ⌘⇧B / Ctrl+Shift+B hides it. The width survives a restart.
+- [ ] ⌘⇧R / Ctrl+Shift+R opens the right panel. Todo shows the agent's latest list, Context shows attached commands, and × removes one.
+- [ ] ⌘J opens the bottom terminal. Dragging resizes it, and the PTY re-fits (run `tput cols; tput lines`). The chevron hides it.
+- [ ] With shell integration off (`cmd`), the terminal fills the session and the timeline is hidden.
+- [ ] A tool needing approval shows the dock above the composer. Allow once, Allow for session, Deny and Deny with feedback all work, and Enter on the feedback field sends it.
+- [ ] The composer grows to 180px then scrolls. Shift+Tab flips Build/Plan (filled/hollow dot). The model chip opens the picker, and Esc closes it.
+- [ ] ⌘, opens Settings. Theme cards apply live, including to open terminals. Timeline detail hides thinking (Compact) or tools (Messages only). Esc closes it.
+- [ ] Inter and IBM Plex Mono render, with no fallback flash after the first launch.
