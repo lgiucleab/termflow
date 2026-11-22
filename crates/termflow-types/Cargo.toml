@@ -13,12 +13,12 @@ workspace = true
 
 [dependencies]
 serde.workspace = true
+serde_json.workspace = true
 ulid.workspace = true
 jiff.workspace = true
 specta = { workspace = true, optional = true }
 
 [dev-dependencies]
-serde_json.workspace = true
 
 [features]
 specta = ["dep:specta"]

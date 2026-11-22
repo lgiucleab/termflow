@@ -13,3 +13,5 @@ workspace = true
 
 [dependencies]
 regex.workspace = true
+keyring.workspace = true
+thiserror.workspace = true

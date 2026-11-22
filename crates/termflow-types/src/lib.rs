@@ -2,7 +2,11 @@
 //!
 //! M0 ships ids, `AppInfo`, `AppEvent` and `ErrorClass`; the transcript (`Turn`, `Part`) lands in M2.
 
+mod transcript;
+
 use std::time::Duration;
+
+pub use transcript::*;
 
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
@@ -37,7 +41,7 @@ pub struct AppInfo {
 }
 
 /// Events published on the core event bus; the UI subscribes to them.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AppEvent {
@@ -52,6 +56,111 @@ pub enum AppEvent {
         terminal_id: TerminalId,
         exit_code: Option<u32>,
     },
+    /// An assistant turn started streaming.
+    AgentTurnStarted {
+        session_id: SessionId,
+        turn_id: TurnId,
+        model: String,
+    },
+    /// Streamed text or readable reasoning for the turn in progress.
+    AgentDelta {
+        session_id: SessionId,
+        turn_id: TurnId,
+        text: String,
+        reasoning: bool,
+    },
+    /// A turn was committed to the transcript (persisted before this event is sent).
+    AgentTurnCommitted { turn: Turn },
+    /// The request failed; the partial turn was discarded.
+    AgentError {
+        session_id: SessionId,
+        turn_id: Option<TurnId>,
+        class: String,
+        message: String,
+    },
+}
+
+/// Request/response format a provider speaks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "snake_case")]
+pub enum WireFormat {
+    AnthropicMessages,
+    OpenaiResponses,
+    OpenaiChat,
+    Ollama,
+}
+
+/// Provider presets offered in settings; `Custom` takes any base URL and wire format.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderKind {
+    Anthropic,
+    Openai,
+    Openrouter,
+    Ollama,
+    Custom,
+}
+
+impl ProviderKind {
+    /// Default base URL and wire format for a preset.
+    pub fn defaults(self) -> Option<(&'static str, WireFormat)> {
+        match self {
+            Self::Anthropic => Some(("https://api.anthropic.com", WireFormat::AnthropicMessages)),
+            Self::Openai => Some(("https://api.openai.com/v1", WireFormat::OpenaiResponses)),
+            Self::Openrouter => Some(("https://openrouter.ai/api/v1", WireFormat::OpenaiChat)),
+            Self::Ollama => Some(("http://localhost:11434", WireFormat::Ollama)),
+            Self::Custom => None,
+        }
+    }
+
+    /// Provider id used in model refs and `served_by`.
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Anthropic => "anthropic",
+            Self::Openai => "openai",
+            Self::Openrouter => "openrouter",
+            Self::Ollama => "ollama",
+            Self::Custom => "custom",
+        }
+    }
+}
+
+/// A configured provider connection. The API key itself lives only in the OS keychain.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct Credential {
+    pub id: String,
+    pub kind: ProviderKind,
+    pub label: String,
+    pub base_url: String,
+    pub wire: WireFormat,
+    pub has_secret: bool,
+    #[cfg_attr(feature = "specta", specta(type = String))]
+    pub created_at: Timestamp,
+}
+
+/// A model offered by a provider's models endpoint.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct ModelInfo {
+    pub id: String,
+    pub display_name: Option<String>,
+    pub context_window: Option<u32>,
+}
+
+/// An agent chat session as listed in the UI.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct AgentSession {
+    pub id: SessionId,
+    pub title: Option<String>,
+    pub credential_id: Option<String>,
+    pub model: Option<String>,
+    pub reasoning: bool,
+    #[cfg_attr(feature = "specta", specta(type = String))]
+    pub updated_at: Timestamp,
 }
 
 /// Which family a shell belongs to; decides how shell integration is injected.
@@ -133,6 +242,23 @@ pub enum ErrorClass {
     },
     Cancelled,
     Unknown,
+}
+
+impl ErrorClass {
+    /// Stable snake-case name for logs, the attempts table and the UI.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::TransientRateLimit { .. } => "transient_rate_limit",
+            Self::QuotaExhausted { .. } => "quota_exhausted",
+            Self::Overloaded => "overloaded",
+            Self::ContextOverflow { .. } => "context_overflow",
+            Self::Auth => "auth",
+            Self::ContentPolicy => "content_policy",
+            Self::BadRequest { .. } => "bad_request",
+            Self::Cancelled => "cancelled",
+            Self::Unknown => "unknown",
+        }
+    }
 }
 
 #[cfg(test)]
