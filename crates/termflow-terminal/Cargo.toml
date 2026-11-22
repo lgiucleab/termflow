@@ -12,3 +12,15 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+termflow-types.workspace = true
+termflow-pty.workspace = true
+termflow-shell-integ.workspace = true
+termflow-store.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+jiff.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

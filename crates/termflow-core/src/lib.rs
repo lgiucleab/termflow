@@ -3,14 +3,13 @@
 pub mod logging;
 
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use termflow_config::Config;
 use termflow_secrets::Redactor;
 use termflow_store::Store;
+use termflow_terminal::TerminalManager;
 use termflow_types::{AppEvent, AppInfo};
 use tokio::sync::broadcast;
-use tokio_util::sync::CancellationToken;
 
 pub use termflow_types as types;
 
@@ -22,6 +21,8 @@ pub enum CoreError {
     Config(#[from] termflow_config::ConfigError),
     #[error(transparent)]
     Store(#[from] termflow_store::StoreError),
+    #[error(transparent)]
+    Terminal(#[from] termflow_terminal::TerminalError),
 }
 
 /// Where the app keeps its files.
@@ -58,6 +59,7 @@ pub struct App {
     store: Store,
     bus: broadcast::Sender<AppEvent>,
     redactor: Redactor,
+    terminals: TerminalManager,
 }
 
 impl App {
@@ -66,12 +68,19 @@ impl App {
         let config = termflow_config::load(&[&paths.global_config_dir.join(termflow_config::FILE_NAME)])?;
         let store = Store::open(paths.data_dir.join("termflow.db"))?;
         let (bus, _) = broadcast::channel(1024);
+        let terminals = TerminalManager::new(
+            store.clone(),
+            bus.clone(),
+            paths.data_dir.join("shell-integration"),
+            config.terminal.shell_integration,
+        )?;
         tracing::info!(data_dir = %paths.data_dir.display(), "core started");
         Ok(Self {
             config,
             store,
             bus,
             redactor,
+            terminals,
         })
     }
 
@@ -98,22 +107,20 @@ impl App {
         self.bus.subscribe()
     }
 
-    /// M0 demo: publish `Tick` every `every` until cancelled. Must be called inside a tokio runtime.
-    pub fn start_demo_ticker(&self, every: Duration, cancel: CancellationToken) {
-        let bus = self.bus.clone();
-        tokio::spawn(async move {
-            let mut n = 0u32;
-            let mut interval = tokio::time::interval(every);
-            loop {
-                tokio::select! {
-                    () = cancel.cancelled() => break,
-                    _ = interval.tick() => {
-                        n = n.wrapping_add(1);
-                        let _ = bus.send(AppEvent::Tick { n }); // no subscribers is fine
-                    }
-                }
-            }
-        });
+    pub fn terminals(&self) -> &TerminalManager {
+        &self.terminals
+    }
+
+    /// Small UI state blobs (e.g. tab layout) in the `settings` table.
+    pub fn setting(&self, key: &str) -> Result<Option<String>, CoreError> {
+        Ok(termflow_store::settings::get(&self.store.reader()?, key)?)
+    }
+
+    pub async fn set_setting(&self, key: String, value_json: String) -> Result<(), CoreError> {
+        Ok(self
+            .store
+            .write(move |c| termflow_store::settings::set(c, &key, &value_json))
+            .await?)
     }
 }
 
@@ -122,15 +129,12 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn ticker_publishes_until_cancelled() {
+    async fn starts_and_persists_settings() {
         let dir = tempfile::tempdir().unwrap();
         let app = App::new(&Paths::under(dir.path()), Redactor::new()).unwrap();
         assert_eq!(app.app_info().name, "TermFlow");
-        let mut rx = app.subscribe();
-        let cancel = CancellationToken::new();
-        app.start_demo_ticker(Duration::from_millis(5), cancel.clone());
-        assert_eq!(rx.recv().await.unwrap(), AppEvent::Tick { n: 1 });
-        assert_eq!(rx.recv().await.unwrap(), AppEvent::Tick { n: 2 });
-        cancel.cancel();
+        assert!(dir.path().join("data/shell-integration/zsh/.zshenv").is_file());
+        app.set_setting("layout".into(), "{}".into()).await.unwrap();
+        assert_eq!(app.setting("layout").unwrap().as_deref(), Some("{}"));
     }
 }

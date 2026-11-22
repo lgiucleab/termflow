@@ -18,6 +18,10 @@ toml.workspace = true
 schemars.workspace = true
 thiserror.workspace = true
 directories.workspace = true
+specta = { workspace = true, optional = true }
+
+[features]
+specta = ["dep:specta"]
 
 [dev-dependencies]
 tempfile.workspace = true
