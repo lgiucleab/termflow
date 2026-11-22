@@ -4,6 +4,19 @@ All notable changes to this project. Format: Keep a Changelog; versions follow S
 
 ## [Unreleased]
 
+### Added (M1 — Terminal)
+- PTY sessions (`portable-pty`, ConPTY on Windows) with shell detection (zsh, bash, fish, nu; pwsh, Windows PowerShell, cmd, Git Bash, WSL distros) and agent-CLI discovery on PATH.
+- Shell integration for zsh, bash (3.2+), fish and PowerShell, injected without touching rc files; OSC 133 / 6973 / 7 parsed into blocks (command, exit code, duration, cwd, branch), stored in SQLite with a 2 MB plain-text output excerpt.
+- Degradation: out-of-order marks switch blocks off for that pane with an indicator.
+- Output batching (8 ms / 64 KiB) over a raw-bytes Tauri channel, with back-pressure.
+- Terminal UI: xterm.js 6 + WebGL (DOM fallback), tabs, splits with drag-to-resize, rename, layout restore, find, links, terminal-aware copy/paste, multi-line paste warning.
+- Inline block headers with copy command/output/markdown, attach to agent, re-run, collapse.
+- Placeholder agent tab listing attached blocks; command palette; 6 themes (Dark, Light, High Contrast, Nord, Gruvbox Dark, Catppuccin Mocha); bundled JetBrains Mono (OFL).
+- Dev-only perf monitor and `TERMFLOW_DEV_AUTORUN` harness; CI runs real-shell tests on macOS and Windows.
+
+### Removed
+- M0 demo ticker.
+
 ### Added (M0 — Skeleton)
 - Cargo workspace with all planned crates (v1/v2 crates are documented stubs).
 - `termflow-types`: ULID ids, `AppInfo`, `AppEvent`, `ErrorClass`.
