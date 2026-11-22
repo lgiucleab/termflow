@@ -1,5 +1,8 @@
 //! SQLite persistence: migrations, a single writer thread and read connections.
 
+pub mod blocks;
+pub mod settings;
+
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
@@ -7,8 +10,12 @@ use rusqlite::{Connection, OpenFlags};
 use rusqlite_migration::{M, Migrations};
 use tokio::sync::{mpsc, oneshot};
 
-static MIGRATIONS: LazyLock<Migrations<'static>> =
-    LazyLock::new(|| Migrations::new(vec![M::up(include_str!("../migrations/0001_init.sql"))]));
+static MIGRATIONS: LazyLock<Migrations<'static>> = LazyLock::new(|| {
+    Migrations::new(vec![
+        M::up(include_str!("../migrations/0001_init.sql")),
+        M::up(include_str!("../migrations/0002_blocks_seq.sql")),
+    ])
+});
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {

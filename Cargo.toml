@@ -18,6 +18,9 @@ termflow-config = { path = "crates/termflow-config" }
 termflow-store = { path = "crates/termflow-store" }
 termflow-secrets = { path = "crates/termflow-secrets" }
 termflow-core = { path = "crates/termflow-core" }
+termflow-pty = { path = "crates/termflow-pty" }
+termflow-shell-integ = { path = "crates/termflow-shell-integ" }
+termflow-terminal = { path = "crates/termflow-terminal" }
 
 # external
 anyhow = "1"
@@ -39,6 +42,10 @@ jiff = { version = "1", features = ["serde"] }
 regex = "1"
 specta = { version = "=2.0.0-rc.28", features = ["derive"] }
 tempfile = "3"
+vte = "0.15"
+base64 = "0.23"
+portable-pty = "0.9"
+proptest = "1"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

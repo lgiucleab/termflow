@@ -1,10 +1,80 @@
 import type { Dict } from "./en";
 
 export const esES: Dict = {
-  app: { tagline: "Terminal y agente de código" },
-  home: {
-    version: "Versión {{ version }}",
-    events: "Eventos recibidos del núcleo: {{ n }}",
-    loading: "Conectando con el núcleo…",
+  app: { loading: "Iniciando…" },
+  common: { cancel: "Cancelar" },
+  terminal: {
+    openFailed: "No se pudo iniciar la shell",
+    exited: "El proceso terminó con código {{ code }}. Pulsa Intro para cerrar.",
   },
+  blocks: {
+    exitCode: "Código de salida {{ code }}",
+    unknownCommand: "(comando)",
+    command: "comando",
+    output: "salida",
+    markdown: "markdown",
+    copyCommand: "Copiar comando",
+    copyOutput: "Copiar salida",
+    copyMarkdown: "Copiar como Markdown",
+    attach: "Adjuntar al agente",
+    rerun: "Ejecutar de nuevo",
+    collapse: "Contraer salida",
+    expand: "Expandir salida",
+    collapsedLines: "▸ {{ n }} líneas contraídas. Haz clic para expandir.",
+    unavailable: "Bloques no disponibles",
+    unavailableHint:
+      "Faltaban marcas de integración de la shell o llegaron desordenadas, así que los comandos de este panel no se agrupan en bloques.",
+  },
+  toast: {
+    copied: "Copiado: {{ what }}",
+    attached: "“{{ cmd }}” adjuntado a la sesión del agente",
+    noBlock: "Aún no hay ningún comando terminado en este panel",
+  },
+  find: {
+    placeholder: "Buscar",
+    previous: "Coincidencia anterior",
+    next: "Coincidencia siguiente",
+    close: "Cerrar búsqueda",
+  },
+  paste: {
+    title: "¿Pegar varias líneas?",
+    body: "Este texto tiene {{ n }} líneas. Cada línea puede ejecutarse como un comando distinto.",
+    confirm: "Pegar",
+  },
+  agent: {
+    title: "Sesión del agente",
+    placeholder:
+      "El agente de código llega en el próximo hito. Los bloques adjuntos aparecen aquí.",
+    empty: "Aún no hay bloques adjuntos. Usa el botón de adjuntar de un bloque o la paleta.",
+    attached: "Bloques adjuntos",
+    detach: "Quitar",
+  },
+  tabs: {
+    terminal: "Terminal",
+    agent: "Agente",
+    new: "Nueva pestaña",
+    close: "Cerrar pestaña",
+    rename: "Nombre de la pestaña",
+    renameHint: "Doble clic para renombrar",
+  },
+  palette: {
+    open: "Comandos",
+    title: "Paleta de comandos",
+    placeholder: "Escribe un comando…",
+    noResults: "Sin resultados",
+  },
+  actions: {
+    newTab: "Nueva pestaña de terminal",
+    splitRight: "Dividir a la derecha",
+    splitDown: "Dividir hacia abajo",
+    closePane: "Cerrar panel",
+    find: "Buscar en la terminal",
+    attachLastBlock: "Adjuntar el último bloque al agente",
+    newAgent: "Nueva sesión del agente",
+    newTerminalWith: "Nueva terminal: {{ shell }}",
+    newExternalAgent: "Nuevo agente externo: {{ name }}",
+    theme: "Tema: {{ name }}",
+    attachBlock: "Adjuntar bloque: {{ cmd }} (salida {{ code }})",
+  },
+  status: { label: "Estado", blocksOn: "Bloques ✓", blocksOff: "Bloques no disponibles" },
 };

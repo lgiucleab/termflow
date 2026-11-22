@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 pub const FILE_NAME: &str = "termflow.toml";
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(deny_unknown_fields, default)]
 pub struct Config {
     pub ui: UiConfig,
@@ -16,6 +17,7 @@ pub struct Config {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(deny_unknown_fields, default)]
 pub struct UiConfig {
     /// UI theme id.
@@ -34,25 +36,42 @@ impl Default for UiConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(deny_unknown_fields, default)]
+#[allow(clippy::struct_excessive_bools)] // independent user toggles mirrored 1:1 from TOML
 pub struct TerminalConfig {
-    /// Shell program. Unset = the user's login shell.
+    /// Shell id (`zsh`, `pwsh`, `wsl:Ubuntu`, ...). Unset = the user's login shell.
     pub shell: Option<String>,
+    /// Inject `OSC 133` shell integration (needed for blocks).
+    pub shell_integration: bool,
+    /// Unset = bundled `JetBrains Mono`.
     pub font_family: Option<String>,
     pub font_size: u16,
+    pub ligatures: bool,
+    pub copy_on_select: bool,
+    /// Ask before pasting text that contains line breaks.
+    pub warn_multiline_paste: bool,
+    /// Lines kept per terminal.
+    pub scrollback: u32,
 }
 
 impl Default for TerminalConfig {
     fn default() -> Self {
         Self {
             shell: None,
+            shell_integration: true,
             font_family: None,
             font_size: 13,
+            ligatures: false,
+            copy_on_select: false,
+            warn_multiline_paste: true,
+            scrollback: 10_000,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(deny_unknown_fields, default)]
 pub struct UpdatesConfig {
     /// Check for updates on startup (the only request made without a configured provider).

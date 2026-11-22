@@ -39,6 +39,7 @@ Untestable-here behaviour goes in `docs/MANUAL_TEST_CHECKLIST.md`.
 - Regenerate TS bridge: `cargo test -p termflow-desktop export_bindings` (also runs on every debug launch)
 - Regenerate config schema: `cargo run -p termflow-config --bin gen-schema`
 - Mock provider: arrives in M3 (`tests/mock-provider`).
+- Dev harness: `TERMFLOW_DEV_AUTORUN='yes | head -n 2000000'` types a command into each new terminal (debug builds); frame times land in the log under `perf`.
 
 ## Where things live
 - `crates/termflow-types` — ids, AppEvent, ErrorClass, transcript (M2+)
@@ -46,13 +47,16 @@ Untestable-here behaviour goes in `docs/MANUAL_TEST_CHECKLIST.md`.
 - `crates/termflow-store` — SQLite, migrations in `migrations/`, single writer thread
 - `crates/termflow-secrets` — redaction (keychain in M2)
 - `crates/termflow-core` — composition root, event bus, logging
-- `crates/termflow-{pty,shell-integ,terminal}` — terminal (M1)
+- `crates/termflow-pty` — PTY spawn/IO, shell + CLI discovery
+- `crates/termflow-shell-integ` — OSC scanner, block tracker, injection; scripts in `shell-integration/`
+- `crates/termflow-terminal` — terminal sessions, batching, back-pressure, block persistence
 - `crates/termflow-{providers,router,catalog}` — models and fallback (M2/M3)
 - `crates/termflow-{agent,tools,perms,context,snapshots}` — agent (M2/M4)
 - `crates/termflow-{mcp,acp,sandbox,worktrees,daemon}`, `apps/cli` — v1 stubs
 - `apps/desktop/src-tauri` — Tauri glue only
 - `apps/desktop/ui/src/bridge` — the only code that calls Tauri; `generated/` is tauri-specta output
+- `apps/desktop/ui/src/features/terminal` — xterm controller (outlives components), block headers; `layout/` pure tab/split model
 
 ## Status
-Current milestone: **M0 — Skeleton** (`docs/specs/M0.md`).
+Current milestone: **M1 — Terminal** (`docs/specs/M1.md`). M0 done.
 Known issues: see the spec's "Known issues" section.

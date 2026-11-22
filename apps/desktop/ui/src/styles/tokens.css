@@ -4,6 +4,7 @@
 :root {
   --tf-bg: #0e1014;
   --tf-surface: #161920;
+  --tf-surface2: #1d212a;
   --tf-border: #262a33;
   --tf-text: #e6e8ec;
   --tf-text-muted: #8b919c;
@@ -13,19 +14,9 @@
   --tf-radius: 8px;
   --tf-space: 8px;
   --tf-font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
-  --tf-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --tf-font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --tf-motion: 150ms;
   color-scheme: dark;
-}
-
-:root[data-theme="light"] {
-  --tf-bg: #f7f8fa;
-  --tf-surface: #ffffff;
-  --tf-border: #dde1e7;
-  --tf-text: #15181d;
-  --tf-text-muted: #5b6270;
-  --tf-accent: #2563eb;
-  color-scheme: light;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,0 +1,294 @@
+// Built-in themes: UI design tokens plus the terminal palette. Palettes of the open (MIT) projects
+// Nord, Gruvbox and Catppuccin are used by colour value; names appear as plain text only.
+import type { ITheme } from "@xterm/xterm";
+
+export interface Theme {
+  id: string;
+  name: string;
+  light: boolean;
+  ui: {
+    bg: string;
+    surface: string;
+    surface2: string;
+    border: string;
+    text: string;
+    muted: string;
+    accent: string;
+    success: string;
+    danger: string;
+  };
+  terminal: ITheme;
+}
+
+const ansi = (c: string[]): Partial<ITheme> => ({
+  black: c[0],
+  red: c[1],
+  green: c[2],
+  yellow: c[3],
+  blue: c[4],
+  magenta: c[5],
+  cyan: c[6],
+  white: c[7],
+  brightBlack: c[8],
+  brightRed: c[9],
+  brightGreen: c[10],
+  brightYellow: c[11],
+  brightBlue: c[12],
+  brightMagenta: c[13],
+  brightCyan: c[14],
+  brightWhite: c[15],
+});
+
+export const THEMES: Theme[] = [
+  {
+    id: "dark",
+    name: "Dark",
+    light: false,
+    ui: {
+      bg: "#0e1014",
+      surface: "#161920",
+      surface2: "#1d212a",
+      border: "#262a33",
+      text: "#e6e8ec",
+      muted: "#8b919c",
+      accent: "#6ea8ff",
+      success: "#4cc38a",
+      danger: "#f06a6a",
+    },
+    terminal: {
+      background: "#0e1014",
+      foreground: "#e6e8ec",
+      cursor: "#6ea8ff",
+      selectionBackground: "#2b3a55",
+      ...ansi([
+        "#1d212a",
+        "#f06a6a",
+        "#4cc38a",
+        "#e5c07b",
+        "#6ea8ff",
+        "#c792ea",
+        "#56c2d6",
+        "#c8ccd4",
+        "#5c6370",
+        "#ff8080",
+        "#6ee0a6",
+        "#f2d48f",
+        "#93bfff",
+        "#ddb0f5",
+        "#7fd8e8",
+        "#ffffff",
+      ]),
+    },
+  },
+  {
+    id: "light",
+    name: "Light",
+    light: true,
+    ui: {
+      bg: "#f7f8fa",
+      surface: "#ffffff",
+      surface2: "#eef0f3",
+      border: "#dde1e7",
+      text: "#15181d",
+      muted: "#5b6270",
+      accent: "#2563eb",
+      success: "#15803d",
+      danger: "#c02626",
+    },
+    terminal: {
+      background: "#f7f8fa",
+      foreground: "#1f2328",
+      cursor: "#2563eb",
+      selectionBackground: "#c7d7fb",
+      ...ansi([
+        "#24292f",
+        "#c02626",
+        "#15803d",
+        "#9a6700",
+        "#2563eb",
+        "#8250df",
+        "#0e7490",
+        "#6e7781",
+        "#57606a",
+        "#dc2626",
+        "#16a34a",
+        "#b45309",
+        "#3b82f6",
+        "#a475f9",
+        "#0891b2",
+        "#8c959f",
+      ]),
+    },
+  },
+  {
+    id: "high-contrast",
+    name: "High Contrast",
+    light: false,
+    ui: {
+      bg: "#000000",
+      surface: "#0a0a0a",
+      surface2: "#141414",
+      border: "#ffffff",
+      text: "#ffffff",
+      muted: "#d0d0d0",
+      accent: "#ffd400",
+      success: "#00ff7f",
+      danger: "#ff5050",
+    },
+    terminal: {
+      background: "#000000",
+      foreground: "#ffffff",
+      cursor: "#ffd400",
+      selectionBackground: "#404040",
+      ...ansi([
+        "#000000",
+        "#ff5050",
+        "#00ff7f",
+        "#ffd400",
+        "#5ca8ff",
+        "#ff7bff",
+        "#00e5ff",
+        "#ffffff",
+        "#9e9e9e",
+        "#ff7878",
+        "#5cffa8",
+        "#ffe866",
+        "#8cc4ff",
+        "#ffa6ff",
+        "#66f0ff",
+        "#ffffff",
+      ]),
+    },
+  },
+  {
+    id: "nord",
+    name: "Nord",
+    light: false,
+    ui: {
+      bg: "#2e3440",
+      surface: "#3b4252",
+      surface2: "#434c5e",
+      border: "#4c566a",
+      text: "#eceff4",
+      muted: "#a3acbd",
+      accent: "#88c0d0",
+      success: "#a3be8c",
+      danger: "#bf616a",
+    },
+    terminal: {
+      background: "#2e3440",
+      foreground: "#d8dee9",
+      cursor: "#d8dee9",
+      selectionBackground: "#434c5e",
+      ...ansi([
+        "#3b4252",
+        "#bf616a",
+        "#a3be8c",
+        "#ebcb8b",
+        "#81a1c1",
+        "#b48ead",
+        "#88c0d0",
+        "#e5e9f0",
+        "#4c566a",
+        "#bf616a",
+        "#a3be8c",
+        "#ebcb8b",
+        "#81a1c1",
+        "#b48ead",
+        "#8fbcbb",
+        "#eceff4",
+      ]),
+    },
+  },
+  {
+    id: "gruvbox-dark",
+    name: "Gruvbox Dark",
+    light: false,
+    ui: {
+      bg: "#282828",
+      surface: "#32302f",
+      surface2: "#3c3836",
+      border: "#504945",
+      text: "#ebdbb2",
+      muted: "#a89984",
+      accent: "#fabd2f",
+      success: "#b8bb26",
+      danger: "#fb4934",
+    },
+    terminal: {
+      background: "#282828",
+      foreground: "#ebdbb2",
+      cursor: "#ebdbb2",
+      selectionBackground: "#504945",
+      ...ansi([
+        "#282828",
+        "#cc241d",
+        "#98971a",
+        "#d79921",
+        "#458588",
+        "#b16286",
+        "#689d6a",
+        "#a89984",
+        "#928374",
+        "#fb4934",
+        "#b8bb26",
+        "#fabd2f",
+        "#83a598",
+        "#d3869b",
+        "#8ec07c",
+        "#ebdbb2",
+      ]),
+    },
+  },
+  {
+    id: "catppuccin-mocha",
+    name: "Catppuccin Mocha",
+    light: false,
+    ui: {
+      bg: "#1e1e2e",
+      surface: "#181825",
+      surface2: "#313244",
+      border: "#45475a",
+      text: "#cdd6f4",
+      muted: "#a6adc8",
+      accent: "#89b4fa",
+      success: "#a6e3a1",
+      danger: "#f38ba8",
+    },
+    terminal: {
+      background: "#1e1e2e",
+      foreground: "#cdd6f4",
+      cursor: "#f5e0dc",
+      selectionBackground: "#45475a",
+      ...ansi([
+        "#45475a",
+        "#f38ba8",
+        "#a6e3a1",
+        "#f9e2af",
+        "#89b4fa",
+        "#f5c2e7",
+        "#94e2d5",
+        "#bac2de",
+        "#585b70",
+        "#f38ba8",
+        "#a6e3a1",
+        "#f9e2af",
+        "#89b4fa",
+        "#f5c2e7",
+        "#94e2d5",
+        "#a6adc8",
+      ]),
+    },
+  },
+];
+
+export const themeById = (id: string | undefined): Theme =>
+  THEMES.find((t) => t.id === id) ?? (THEMES[0] as Theme);
+
+export function applyTheme(theme: Theme, root: HTMLElement = document.documentElement): void {
+  for (const [k, v] of Object.entries(theme.ui)) {
+    root.style.setProperty(`--tf-${k === "muted" ? "text-muted" : k}`, v);
+  }
+  root.dataset.theme = theme.id;
+  root.style.colorScheme = theme.light ? "light" : "dark";
+}
