@@ -1,0 +1,19 @@
+[package]
+name = "mock-provider"
+description = "Scriptable fake LLM provider (axum) replaying recorded/documented responses for tests."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+axum.workspace = true
+tokio = { workspace = true, features = ["signal"] }
+serde_json.workspace = true
+futures.workspace = true
+tokio-stream.workspace = true

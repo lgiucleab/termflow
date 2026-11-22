@@ -1,0 +1,62 @@
+---
+source: crates/termflow-providers/src/tests.rs
+expression: "ollama::render(&transcript(), &ctx(\"ollama\", \"cred-l\"))"
+---
+{
+  "messages": [
+    {
+      "content": "You are a test.",
+      "role": "system"
+    },
+    {
+      "content": "Read main.rs",
+      "role": "user"
+    },
+    {
+      "content": "Reading.",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "function": {
+            "arguments": {
+              "path": "src/main.rs"
+            },
+            "name": "read"
+          }
+        }
+      ]
+    },
+    {
+      "content": "fn main() {}",
+      "role": "tool",
+      "tool_name": "read"
+    },
+    {
+      "content": "Explain it",
+      "role": "user"
+    }
+  ],
+  "model": "test-model",
+  "stream": true,
+  "think": true,
+  "tools": [
+    {
+      "function": {
+        "description": "Read a file",
+        "name": "read",
+        "parameters": {
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    }
+  ]
+}

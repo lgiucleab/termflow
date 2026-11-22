@@ -1,0 +1,96 @@
+---
+source: crates/termflow-providers/src/tests.rs
+expression: "anthropic::render(&transcript(), &ctx(\"anthropic\", \"cred-a\"))"
+---
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "Read main.rs",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "content": [
+        {
+          "signature": "sig-1",
+          "thinking": "Check it",
+          "type": "thinking"
+        },
+        {
+          "text": "Reading.",
+          "type": "text"
+        },
+        {
+          "id": "0000000000000000000000001A",
+          "input": {
+            "path": "src/main.rs"
+          },
+          "name": "read",
+          "type": "tool_use"
+        }
+      ],
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "content": "fn main() {}",
+          "is_error": false,
+          "tool_use_id": "0000000000000000000000001A",
+          "type": "tool_result"
+        },
+        {
+          "cache_control": {
+            "type": "ephemeral"
+          },
+          "text": "Explain it",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "test-model",
+  "stream": true,
+  "system": [
+    {
+      "cache_control": {
+        "type": "ephemeral"
+      },
+      "text": "You are a test.",
+      "type": "text"
+    }
+  ],
+  "thinking": {
+    "display": "summarized",
+    "type": "adaptive"
+  },
+  "tool_choice": {
+    "type": "auto"
+  },
+  "tools": [
+    {
+      "cache_control": {
+        "type": "ephemeral"
+      },
+      "description": "Read a file",
+      "input_schema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "name": "read"
+    }
+  ]
+}

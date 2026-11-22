@@ -1,0 +1,1 @@
+{"models":[{"name":"local-test-model:latest","model":"local-test-model:latest","size":1000,"details":{"family":"test","parameter_size":"7B","quantization_level":"Q4_K_M"}}]}

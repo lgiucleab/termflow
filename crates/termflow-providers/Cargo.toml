@@ -1,6 +1,6 @@
 [package]
 name = "termflow-providers"
-description = "Provider adapters: Anthropic, OpenAI Responses/Chat, Ollama, ..."
+description = "Provider adapters: Anthropic, OpenAI Responses/Chat, OpenAI-compatible, Ollama."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,3 +12,21 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+termflow-types.workspace = true
+reqwest.workspace = true
+eventsource-stream.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tokio-util.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+jiff.workspace = true
+ulid.workspace = true
+
+[dev-dependencies]
+mock-provider.workspace = true
+insta.workspace = true
+tokio = { workspace = true }
