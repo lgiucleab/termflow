@@ -38,7 +38,7 @@ async fn next_block(
                 AppEvent::TerminalExited { exit_code, .. } => {
                     panic!("shell exited ({exit_code:?}); output: {:?}", String::from_utf8_lossy(&out.lock().unwrap()))
                 }
-                AppEvent::BlockStarted { .. } => {}
+                _ => {} // block starts and agent events
             },
             () = tokio::time::sleep(Duration::from_millis(100)) => {}
         }
