@@ -35,3 +35,16 @@ For a no-key smoke test, run `cargo run -p mock-provider -- tests/fixtures/http/
 - [ ] Quit the app mid-answer, then reopen: the session shows up to the last finished answer and continues normally.
 - [ ] A wrong API key shows "The API key was rejected." A non-reasoning model with Reasoning on shows the provider's error; turning Reasoning off fixes it.
 - [ ] macOS Keychain Access shows items under `com.flowlabs.termflow`; removing a provider in the app removes its item.
+
+## M2b: Tools, agent loop, chat-first layout
+
+- [ ] First start: the start screen shows "Open folder…"; picking a folder opens it with a new chat; reopening the app returns to it.
+- [ ] Sidebar: new chat, rename (double-click), delete (confirm). The working dot shows while the agent runs.
+- [ ] In a real Rust project with a real key: "find the failing test and fix it". The agent reads/greps without asking, shows an approval card with a diff for the edit, runs `cargo test` without asking, and reports.
+- [ ] Deny with feedback: the agent adapts instead of retrying the same call.
+- [ ] Shift+Tab to Plan: the agent explores and writes a todo plan; edits are refused with "Plan mode".
+- [ ] Esc while a long `bash` runs (e.g. `sleep 60`): the command is killed and the card says cancelled.
+- [ ] `/help`, `/cost`, `/init` (creates AGENTS.md after approval), `/clear` (new chat), `/attach` (attaches the last terminal block).
+- [ ] `@` picker lists project files (not `.env`); the attached file shows collapsed in the message.
+- [ ] Cmd/Ctrl+J toggles the terminal panel; terminals open in the project folder; drag to resize.
+- [ ] Windows: the agent's `bash` runs through PowerShell 7 and `cargo test` works.

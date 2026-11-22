@@ -12,7 +12,9 @@ export type Action =
   | "nextTab"
   | "prevTab"
   | "nextPane"
-  | "prevPane";
+  | "prevPane"
+  | "toggleTerminal"
+  | "newChat";
 
 export interface KeyLike {
   key: string;
@@ -34,6 +36,7 @@ export function actionFor(e: KeyLike, mac: boolean): Action | null {
     if (e.shiftKey) {
       if (k === "d") return "splitDown";
       if (k === "a") return "attachLastBlock";
+      if (k === "n") return "newChat";
       if (k === "]" || k === "}") return "nextTab";
       if (k === "[" || k === "{") return "prevTab";
       return null;
@@ -44,6 +47,7 @@ export function actionFor(e: KeyLike, mac: boolean): Action | null {
       w: "closePane",
       d: "splitRight",
       f: "find",
+      j: "toggleTerminal",
       "]": "nextPane",
       "[": "prevPane",
     };
@@ -59,6 +63,8 @@ export function actionFor(e: KeyLike, mac: boolean): Action | null {
     e: "splitDown",
     f: "find",
     a: "attachLastBlock",
+    j: "toggleTerminal",
+    n: "newChat",
     pagedown: "nextTab",
     pageup: "prevTab",
     "]": "nextPane",
@@ -77,6 +83,8 @@ export function shortcutLabel(action: Action, mac: boolean): string {
     splitDown: "⌘⇧D",
     find: "⌘F",
     attachLastBlock: "⌘⇧A",
+    toggleTerminal: "⌘J",
+    newChat: "⌘⇧N",
   };
   const otherKeys: Partial<Record<Action, string>> = {
     palette: "Ctrl+Shift+K",
@@ -86,6 +94,8 @@ export function shortcutLabel(action: Action, mac: boolean): string {
     splitDown: "Ctrl+Shift+E",
     find: "Ctrl+Shift+F",
     attachLastBlock: "Ctrl+Shift+A",
+    toggleTerminal: "Ctrl+Shift+J",
+    newChat: "Ctrl+Shift+N",
   };
   return (mac ? macKeys : otherKeys)[action] ?? "";
 }

@@ -1,6 +1,7 @@
-//! Project context (BUILD_PROMPT §6.5): instruction files from the project up to the git root,
+//! Project context (`BUILD_PROMPT` §6.5): instruction files from the project up to the git root,
 //! a short environment summary, and `@file` expansion. Secrets files are never read automatically.
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -21,7 +22,11 @@ pub fn is_secret_file(p: &Path) -> bool {
         .file_name()
         .map(|n| n.to_string_lossy().to_lowercase())
         .unwrap_or_default();
-    name.starts_with(".env") || name.ends_with(".pem") || name.ends_with(".key") || name.starts_with("id_")
+    let ext = p
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    name.starts_with(".env") || ext == "pem" || ext == "key" || name.starts_with("id_")
 }
 
 fn read_capped(p: &Path) -> Option<String> {
@@ -100,17 +105,14 @@ pub async fn environment(root: &Path, shell: &str) -> String {
         let text = String::from_utf8_lossy(&o.stdout);
         let mut lines = text.lines();
         if let Some(branch) = lines.next() {
-            s.push_str(&format!("- Git: {}\n", branch.trim_start_matches("## ")));
+            let _ = writeln!(s, "- Git: {}", branch.trim_start_matches("## "));
         }
         let changed: Vec<&str> = lines.collect();
         if !changed.is_empty() {
-            s.push_str(&format!("- Uncommitted changes: {} file(s)", changed.len()));
+            let _ = write!(s, "- Uncommitted changes: {} file(s)", changed.len());
             let shown: Vec<&str> = changed.iter().take(15).map(|l| l.trim()).collect();
-            s.push_str(&format!(
-                " ({}{})\n",
-                shown.join(", "),
-                if changed.len() > 15 { ", …" } else { "" }
-            ));
+            let more = if changed.len() > 15 { ", …" } else { "" };
+            let _ = writeln!(s, " ({}{more})", shown.join(", "));
         }
     } else {
         s.push_str("- Git: not a git repository\n");
@@ -146,7 +148,7 @@ pub fn expand_mentions(root: &Path, text: &str) -> String {
         } else {
             content
         };
-        attached.push_str(&format!("\n\n<attached_file path=\"{m}\">\n{body}\n</attached_file>"));
+        let _ = write!(attached, "\n\n<attached_file path=\"{m}\">\n{body}\n</attached_file>");
     }
     format!("{text}{attached}")
 }

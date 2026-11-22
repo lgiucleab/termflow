@@ -42,6 +42,15 @@ export const esES: Dict = {
     confirm: "Pegar",
   },
   agent: {
+    plan: "Planificar",
+    build: "Construir",
+    modeHint:
+      "El modo Planificar solo explora y planifica; el modo Construir puede cambiar archivos y ejecutar comandos. Mayús+Tab cambia.",
+    emptyProject: "¿En qué trabajamos en {{ name }}?",
+    emptyHint:
+      "Escribe / para comandos y @ para adjuntar un archivo o bloque de la terminal. Mayús+Tab cambia Planificar/Construir.",
+    mentionBlock: "bloque: {{ cmd }}",
+    suggestions: "Sugerencias",
     title: "Sesión del agente",
     empty:
       "Pregunta lo que quieras. Adjunta bloques de la terminal desde su cabecera para dar contexto al modelo.",
@@ -123,6 +132,9 @@ export const esES: Dict = {
     noResults: "Sin resultados",
   },
   actions: {
+    newChat: "Nuevo chat",
+    toggleTerminal: "Mostrar u ocultar la terminal",
+    openProject: "Abrir o cambiar de proyecto…",
     providers: "Ajustes: Proveedores",
     newTab: "Nueva pestaña de terminal",
     splitRight: "Dividir a la derecha",
@@ -135,6 +147,63 @@ export const esES: Dict = {
     newExternalAgent: "Nuevo agente externo: {{ name }}",
     theme: "Tema: {{ name }}",
     attachBlock: "Adjuntar bloque: {{ cmd }} (salida {{ code }})",
+  },
+  panel: { label: "Terminal", show: "Mostrar terminal", hide: "Ocultar terminal" },
+  start: {
+    tagline: "Un agente de código que trabaja en la carpeta de tu proyecto.",
+    open: "Abrir carpeta…",
+    recent: "Proyectos recientes",
+    forget: "Quitar {{ name }} de los proyectos recientes",
+    switch: "Abrir otro proyecto",
+    switchShort: "Cambiar",
+  },
+  chats: {
+    label: "Chats",
+    new: "Nuevo chat",
+    untitled: "Nuevo chat",
+    working: "El agente está trabajando",
+    delete: "Eliminar chat",
+    confirmDelete: "¿Eliminar?",
+    movedNote: "Los chats del agente ahora están en la barra lateral.",
+  },
+  tools: {
+    todo: "lista de tareas",
+    approvalTitle: "Aprobar esta llamada a herramienta",
+    allowOnce: "Permitir una vez",
+    allowSession: "Permitir en este chat",
+    deny: "Denegar",
+    denyFeedback: "Denegar con comentario",
+    feedbackHint: "Dile al agente qué hacer en su lugar (Intro para enviar)",
+    status: {
+      approval: "necesita aprobación",
+      running: "ejecutando",
+      done: "hecho",
+      error: "falló",
+      queued: "en cola",
+    },
+  },
+  slash: {
+    plan: "Cambiar a modo Planificar (solo lectura)",
+    build: "Cambiar a modo Construir",
+    model: "Cambiar el modelo",
+    clear: "Empezar un chat nuevo (este se conserva)",
+    attach: "Adjuntar el último bloque de la terminal",
+    init: "Generar un AGENTS.md para este proyecto",
+    cost: "Tokens usados en este chat",
+    help: "Mostrar comandos y atajos",
+    profile: "Perfil de modelos de respaldo",
+    compact: "Resumir la conversación para ahorrar contexto",
+    undo: "Deshacer el último cambio del agente",
+    redo: "Rehacer",
+    later: "{{ cmd }} llega en el hito {{ milestone }}.",
+    nowPlan:
+      "Modo Planificar: el agente explora y planifica, pero no puede cambiar archivos ni ejecutar otros comandos.",
+    nowBuild:
+      "Modo Construir: el agente puede cambiar archivos y ejecutar comandos, con aprobaciones.",
+    costLine:
+      "{{ requests }} peticiones · {{ input }} tokens de entrada · {{ output }} de salida · {{ cached }} en caché · {{ reasoning }} de razonamiento (los precios llegan con M3)",
+    helpText:
+      "Comandos: /plan /build /model /clear /attach /init /cost /help. Escribe @ para adjuntar un archivo o bloque. Mayús+Tab: Planificar/Construir · Esc: detener · Cmd/Ctrl+J: terminal · Cmd/Ctrl+Mayús+N: nuevo chat · Cmd/Ctrl+K: paleta de comandos.",
   },
   status: { label: "Estado", blocksOn: "Bloques ✓", blocksOff: "Bloques no disponibles" },
 };

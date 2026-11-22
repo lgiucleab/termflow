@@ -1,7 +1,6 @@
 import { createSignal, For, type JSX, Match, Show, Switch } from "solid-js";
 import { Icon } from "../../components/Icon";
 import { t } from "../../i18n";
-import { AgentTab } from "../agent/AgentTab";
 import { existingController } from "../terminal/registry";
 import { TerminalPane } from "../terminal/TerminalPane";
 import type { Layout, LayoutNode, Path, Tab } from "./model";
@@ -14,7 +13,6 @@ export interface WorkspaceProps {
   onFocusPane: (id: string) => void;
   onClosePane: (id: string) => void;
   onRatio: (tabId: string, path: Path, ratio: number) => void;
-  onAgentSession: (paneId: string, sessionId: string) => void;
   onOpenProviders: () => void;
   onNewTab: () => void;
   onOpenPalette: () => void;
@@ -144,12 +142,7 @@ function NodeView(props: {
           const pane = leaf().pane;
           const focused = () => props.tab.focused === pane.id;
           return pane.kind.type === "agent" ? (
-            <AgentTab
-              pane={pane}
-              focused={focused()}
-              onFocus={() => props.p.onFocusPane(pane.id)}
-              onSession={props.p.onAgentSession}
-            />
+            <div class="tf-muted tf-pane-note">{t("chats.movedNote")}</div>
           ) : (
             <TerminalPane
               pane={pane}

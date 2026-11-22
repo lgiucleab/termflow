@@ -1,6 +1,9 @@
 import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
-import type { AgentCli, Bridge, ShellSpec } from "./bridge";
+import type { AgentCli, Bridge, Workspace as Project, ShellSpec } from "./bridge";
 import { BridgeProvider } from "./bridge/context";
+import { ChatView, dispatchToolEvent } from "./features/chat/ChatView";
+import { Sidebar } from "./features/chat/Sidebar";
+import { StartScreen } from "./features/chat/StartScreen";
 import {
   activeTab,
   allPanes,
@@ -17,7 +20,6 @@ import {
   parseLayout,
   renameTab,
   selectTab,
-  setAgentSession,
   setRatio,
   splitFocused,
 } from "./features/layout/model";
@@ -37,7 +39,28 @@ import { t } from "./i18n";
 import { type Action, actionFor, isMac, shortcutLabel } from "./keybindings";
 import { attach } from "./stores/agent";
 import { dispatchAgentEvent } from "./stores/agentEvents";
-import { providersOpen, setProvidersOpen } from "./stores/providers";
+import {
+  activeChat,
+  chats,
+  LAST_PROJECT_KEY,
+  PANEL_KEY,
+  panelHeight,
+  panelOpen,
+  project,
+  refreshChats,
+  setActiveChat,
+  setPanelHeight,
+  setPanelOpen,
+  setProject,
+} from "./stores/project";
+import {
+  credentials,
+  LAST_MODEL_KEY,
+  type ModelChoice,
+  providersOpen,
+  refreshCredentials,
+  setProvidersOpen,
+} from "./stores/providers";
 import { setConfig, setTheme, theme } from "./stores/settings";
 import { showToast, toast } from "./stores/toast";
 
@@ -72,7 +95,61 @@ export function App(props: { bridge: Bridge }) {
     return p ? existingController(p.id) : undefined;
   };
 
-  const open = (kind: PaneKind) => setLayout(newTab(layout(), kind));
+  const open = (kind: PaneKind) => {
+    setPanelOpen(true);
+    setLayout(newTab(layout(), kind));
+  };
+
+  const savePanel = () =>
+    void bridge.settingSet(PANEL_KEY, JSON.stringify({ open: panelOpen(), height: panelHeight() }));
+
+  const togglePanel = () => {
+    setPanelOpen((o) => !o);
+    savePanel();
+  };
+
+  const newChat = async () => {
+    const p = project();
+    if (!p) return;
+    const last = JSON.parse(
+      (await bridge.settingGet(LAST_MODEL_KEY)) ?? "null",
+    ) as ModelChoice | null;
+    const valid = last && credentials().some((c) => c.id === last.credentialId);
+    const s = await bridge.createAgentSession(
+      p.id,
+      valid ? last.credentialId : null,
+      valid ? last.model : null,
+    );
+    if (valid && !last.reasoning)
+      await bridge.setAgentModel(s.id, last.credentialId, last.model, false);
+    await refreshChats(bridge);
+    setActiveChat(s.id);
+  };
+
+  const openProject = async (w: Project) => {
+    setProject(w);
+    void bridge.settingSet(LAST_PROJECT_KEY, w.id);
+    await refreshChats(bridge);
+    const first = chats()[0];
+    if (first) setActiveChat(first.id);
+    else await newChat();
+  };
+
+  const switchProject = () => {
+    setProject(null);
+    setActiveChat(null);
+  };
+
+  const attachLastBlock = async () => {
+    const c = focusedController();
+    const b = c?.lastBlock[0]();
+    if (c && b) return c.attach(b);
+    const [recent] = await bridge.recentBlocks(1).catch(() => []);
+    if (!recent) return showToast(t("toast.noBlock"));
+    const out = await bridge.blockOutput(recent.id);
+    attach({ block: recent, markdown: blockMarkdown(recent, out?.output ?? "") });
+    showToast(t("toast.attached", { cmd: recent.command }));
+  };
 
   const run = (a: Action) => {
     switch (a) {
@@ -82,15 +159,23 @@ export function App(props: { bridge: Bridge }) {
       case "newTab":
         open({ type: "terminal" });
         break;
+      case "toggleTerminal":
+        togglePanel();
+        break;
+      case "newChat":
+        void newChat();
+        break;
       case "closePane": {
         const p = focusedPane();
         if (p) setLayout(closePane(layout(), p.id));
         break;
       }
       case "splitRight":
+        setPanelOpen(true);
         setLayout(splitFocused(layout(), "row").layout);
         break;
       case "splitDown":
+        setPanelOpen(true);
         setLayout(splitFocused(layout(), "column").layout);
         break;
       case "find": {
@@ -98,13 +183,9 @@ export function App(props: { bridge: Bridge }) {
         c?.findOpen[1](true);
         break;
       }
-      case "attachLastBlock": {
-        const c = focusedController();
-        const b = c?.lastBlock[0]();
-        if (c && b) void c.attach(b);
-        else showToast(t("toast.noBlock"));
+      case "attachLastBlock":
+        void attachLastBlock();
         break;
-      }
       case "nextTab":
         setLayout(selectTab(layout(), 1));
         break;
@@ -122,6 +203,8 @@ export function App(props: { bridge: Bridge }) {
 
   const openPalette = async () => {
     const actions: [Action, string][] = [
+      ["newChat", t("actions.newChat")],
+      ["toggleTerminal", t("actions.toggleTerminal")],
       ["newTab", t("actions.newTab")],
       ["splitRight", t("actions.splitRight")],
       ["splitDown", t("actions.splitDown")],
@@ -136,7 +219,7 @@ export function App(props: { bridge: Bridge }) {
         hint: shortcutLabel(a, mac),
         run: () => run(a),
       })),
-      { id: "agent", label: t("actions.newAgent"), run: () => open({ type: "agent" }) },
+      { id: "open-project", label: t("actions.openProject"), run: () => switchProject() },
       ...shells().map((s) => ({
         id: `shell:${s.id}`,
         label: t("actions.newTerminalWith", { shell: s.name }),
@@ -189,20 +272,34 @@ export function App(props: { bridge: Bridge }) {
     window.addEventListener("keydown", onKey, { capture: true });
     onCleanup(() => window.removeEventListener("keydown", onKey, { capture: true }));
     const unlisten = await bridge.onCoreEvent((ev) => {
-      if (dispatchAgentEvent(ev)) return;
+      if (dispatchAgentEvent(ev) || dispatchToolEvent(ev)) return;
       if ("block" in ev) routeEvent(ev.block.terminal_id, ev);
       else if ("terminal_id" in ev) routeEvent(ev.terminal_id, ev);
     });
     onCleanup(unlisten);
 
     try {
-      const [cfg, savedTheme, savedLayout, sh, ag] = await Promise.all([
+      const [cfg, savedTheme, savedLayout, sh, ag, lastProject, panel] = await Promise.all([
         bridge.appConfig(),
         bridge.settingGet(THEME_KEY),
         bridge.settingGet(LAYOUT_KEY),
         bridge.listShells(),
         bridge.listAgents(),
+        bridge.settingGet(LAST_PROJECT_KEY),
+        bridge.settingGet(PANEL_KEY),
       ]);
+      await refreshCredentials(bridge).catch(() => {});
+      const pnl = JSON.parse(panel ?? "null") as { open: boolean; height: number } | null;
+      if (pnl) {
+        setPanelOpen(pnl.open);
+        setPanelHeight(Math.max(120, pnl.height));
+      }
+      // Re-open the last project if its folder still exists.
+      const w = lastProject ? await bridge.workspace(lastProject).catch(() => null) : null;
+      if (w) {
+        const reopened = await bridge.openWorkspace(w.path).catch(() => null);
+        if (reopened) await openProject(reopened);
+      }
       setConfig(cfg);
       setTheme(themeById(savedTheme ?? cfg.ui.theme));
       setShells(sh);
@@ -226,25 +323,86 @@ export function App(props: { bridge: Bridge }) {
     <BridgeProvider bridge={bridge}>
       <div class="tf-app">
         <Show when={ready()} fallback={<div class="tf-loading">{t("app.loading")}</div>}>
-          <Workspace
-            layout={layout()}
-            onSelectTab={(id) => setLayout({ ...layout(), active: id })}
-            onCloseTab={(id) => setLayout(closeTab(layout(), id).layout)}
-            onRenameTab={(id, title) => setLayout(renameTab(layout(), id, title))}
-            onFocusPane={(id) => {
-              if (focusedPane()?.id !== id) setLayout(focusPane(layout(), id));
-            }}
-            onClosePane={(id) => setLayout(closePane(layout(), id))}
-            onRatio={(tab, path, r) => setLayout(setRatio(layout(), tab, path, r))}
-            onAgentSession={(paneId, sessionId) =>
-              setLayout(setAgentSession(layout(), paneId, sessionId))
-            }
-            onOpenProviders={() => setProvidersOpen(true)}
-            onNewTab={() => run("newTab")}
-            onOpenPalette={() => void openPalette()}
-          />
+          <Show when={project()} fallback={<StartScreen onOpen={(w) => void openProject(w)} />}>
+            <div class="tf-shell">
+              <Sidebar onNewChat={() => void newChat()} onSwitchProject={switchProject} />
+              <div class="tf-main">
+                <Show when={activeChat()} keyed>
+                  {(id) => (
+                    <ChatView
+                      sessionId={id}
+                      onNewChat={() => void newChat()}
+                      onAttachLastBlock={() => void attachLastBlock()}
+                    />
+                  )}
+                </Show>
+                <Show when={panelOpen()}>
+                  {/* biome-ignore lint/a11y/useSemanticElements: an <hr> can't be a draggable flex child. */}
+                  <div
+                    class="tf-panel-resize"
+                    role="separator"
+                    aria-orientation="horizontal"
+                    onPointerDown={(e) => {
+                      const handle = e.currentTarget;
+                      handle.setPointerCapture(e.pointerId);
+                      const startY = e.clientY;
+                      const startH = panelHeight();
+                      const move = (ev: PointerEvent) =>
+                        setPanelHeight(
+                          Math.min(
+                            window.innerHeight - 160,
+                            Math.max(120, startH + startY - ev.clientY),
+                          ),
+                        );
+                      const up = () => {
+                        handle.removeEventListener("pointermove", move);
+                        handle.removeEventListener("pointerup", up);
+                        savePanel();
+                      };
+                      handle.addEventListener("pointermove", move);
+                      handle.addEventListener("pointerup", up);
+                    }}
+                  />
+                  <section
+                    class="tf-panel"
+                    style={{ height: `${panelHeight()}px` }}
+                    aria-label={t("panel.label")}
+                  >
+                    <Workspace
+                      layout={layout()}
+                      onSelectTab={(id) => setLayout({ ...layout(), active: id })}
+                      onCloseTab={(id) => setLayout(closeTab(layout(), id).layout)}
+                      onRenameTab={(id, title) => setLayout(renameTab(layout(), id, title))}
+                      onFocusPane={(id) => {
+                        if (focusedPane()?.id !== id) setLayout(focusPane(layout(), id));
+                      }}
+                      onClosePane={(id) => setLayout(closePane(layout(), id))}
+                      onRatio={(tab, path, r) => setLayout(setRatio(layout(), tab, path, r))}
+                      onOpenProviders={() => setProvidersOpen(true)}
+                      onNewTab={() => run("newTab")}
+                      onOpenPalette={() => void openPalette()}
+                    />
+                  </section>
+                </Show>
+              </div>
+            </div>
+          </Show>
         </Show>
         <footer class="tf-status">
+          <button
+            type="button"
+            class="tf-status-btn"
+            onClick={togglePanel}
+            title={shortcutLabel("toggleTerminal", mac)}
+          >
+            {panelOpen() ? t("panel.hide") : t("panel.show")}
+          </button>
+          <button type="button" class="tf-status-btn" onClick={() => setProvidersOpen(true)}>
+            {t("providers.title")}
+          </button>
+          <button type="button" class="tf-status-btn" onClick={() => void openPalette()}>
+            {t("palette.open")}
+          </button>
           <span>
             {(() => {
               const p = focusedPane();
@@ -259,7 +417,7 @@ export function App(props: { bridge: Bridge }) {
               );
             })()}
           </span>
-          <span class="tf-status-cwd">{focusedController()?.cwd[0]() ?? ""}</span>
+          <span class="tf-status-cwd">{project()?.path ?? ""}</span>
           <span class="tf-spacer" />
           <Show when={blocksStatus()}>
             <span data-off={focusedController()?.degraded[0]() ? "1" : "0"}>{blocksStatus()}</span>

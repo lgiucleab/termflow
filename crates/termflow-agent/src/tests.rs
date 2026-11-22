@@ -1,6 +1,7 @@
-//! Agent tests against the mock provider, including the BUILD_PROMPT §12 M2 acceptance flow.
+//! Agent tests against the mock provider, including the `BUILD_PROMPT` §12 M2 acceptance flow.
 #![allow(clippy::unwrap_used)] // test code
 
+use std::fmt::Write as _;
 use std::path::Path;
 use std::time::Duration;
 
@@ -17,12 +18,11 @@ const ERR: &str = include_str!("../../../tests/fixtures/http/anthropic/error_aft
 // ---- scripted responses per wire format ----
 
 fn sse(events: &[(&str, serde_json::Value)]) -> Script {
-    Script::sse(
-        &events
-            .iter()
-            .map(|(e, d)| format!("event: {e}\ndata: {d}\n\n"))
-            .collect::<String>(),
-    )
+    let mut body = String::new();
+    for (e, d) in events {
+        let _ = write!(body, "event: {e}\ndata: {d}\n\n");
+    }
+    Script::sse(&body)
 }
 
 fn anthropic_tool(id: &str, name: &str, args: &serde_json::Value) -> Script {
@@ -261,7 +261,7 @@ fn tool_results(turns: &[Turn]) -> Vec<(String, bool)> {
 type ToolScript = fn(&str, &str, &serde_json::Value) -> Script;
 type TextScript = fn(&str) -> Script;
 
-/// BUILD_PROMPT §12 M2: reads files, proposes a change, runs `cargo test` after approval, reports.
+/// `BUILD_PROMPT` §12 M2: reads files, proposes a change, runs `cargo test` after approval, reports.
 async fn acceptance(wire: WireFormat, tool: ToolScript, text: TextScript) {
     let mut h = h(wire).await;
     h.mock.push(tool("call_1", "read", &json!({"path":"src/lib.rs"})));
@@ -381,7 +381,7 @@ async fn denied_call_returns_feedback_to_model() {
     assert!(h.mock.requests()[1].body.to_string().contains("use y.txt"));
 }
 
-/// A tool that started is never run again (BUILD_PROMPT §7.7.3), even after a restart.
+/// A tool that started is never run again (`BUILD_PROMPT` §7.7.3), even after a restart.
 #[tokio::test(flavor = "multi_thread")]
 async fn interrupted_tool_is_repaired_not_rerun() {
     let mut h = h(WireFormat::AnthropicMessages).await;

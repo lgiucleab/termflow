@@ -204,13 +204,12 @@ impl Tool for Glob {
                     })
                 })
                 .collect();
-            found.sort_by(|a, b| b.0.cmp(&a.0));
+            found.sort_by_key(|f| std::cmp::Reverse(f.0));
             let total = found.len();
-            let mut out: String = found
-                .iter()
-                .take(GLOB_MAX)
-                .map(|(_, p)| format!("{}\n", p.display()))
-                .collect();
+            let mut out = String::new();
+            for (_, p) in found.iter().take(GLOB_MAX) {
+                let _ = writeln!(out, "{}", p.display());
+            }
             if total > GLOB_MAX {
                 let _ = write!(out, "[{} more not shown]", total - GLOB_MAX);
             }

@@ -1,4 +1,4 @@
-//! todo and attach_block.
+//! `todo` and `attach_block`.
 
 use std::fmt::Write as _;
 

@@ -1,6 +1,7 @@
 // The ONLY module that talks to Tauri. Everything else imports from here.
 import { Channel } from "@tauri-apps/api/core";
 import type { UnlistenFn } from "@tauri-apps/api/event";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   type AddCredential_Deserialize,
@@ -8,8 +9,10 @@ import {
   type AgentSession_Serialize,
   type AppEvent_Serialize,
   type AppInfo,
+  type ApprovalKind,
   type Block_Serialize,
   type BlockId,
+  type CallId,
   type Config_Serialize,
   type Credential,
   commands,
@@ -17,9 +20,11 @@ import {
   type ModelInfo_Serialize,
   type Part_Serialize,
   type SessionId,
+  type SessionUsage,
   type ShellSpec,
   type TerminalId,
   type Turn_Serialize,
+  type Workspace_Serialize,
 } from "./generated/bindings";
 
 export type AppEvent = AppEvent_Serialize;
@@ -29,6 +34,8 @@ export type Turn = Turn_Serialize;
 export type Part = Part_Serialize;
 export type NewCredential = AddCredential_Deserialize;
 export type AgentSession = AgentSession_Serialize;
+export type Workspace = Workspace_Serialize;
+export type { ApprovalKind, CallId, SessionUsage };
 export type ModelInfo = ModelInfo_Serialize;
 export type { AgentCli, AppInfo, BlockId, Credential, SessionId, ShellSpec, TerminalId };
 
@@ -63,9 +70,27 @@ export interface Bridge {
   deleteCredential(id: string): Promise<void>;
   /** Also the connection test: errors come back classified. */
   listModels(credentialId: string): Promise<ModelInfo[]>;
-  agentSessions(): Promise<AgentSession[]>;
+  agentSessions(workspaceId: string | null): Promise<AgentSession[]>;
   agentSession(id: SessionId): Promise<AgentSession>;
-  createAgentSession(credentialId: string | null, model: string | null): Promise<AgentSession>;
+  createAgentSession(
+    workspaceId: string | null,
+    credentialId: string | null,
+    model: string | null,
+  ): Promise<AgentSession>;
+  setAgentMode(id: SessionId, plan: boolean): Promise<void>;
+  renameAgentSession(id: SessionId, title: string): Promise<void>;
+  deleteAgentSession(id: SessionId): Promise<void>;
+  agentInit(id: SessionId): Promise<void>;
+  /** Answer an approval card; false if it was no longer waiting. */
+  agentApprove(callId: CallId, kind: ApprovalKind, feedback: string | null): Promise<boolean>;
+  agentUsage(id: SessionId): Promise<SessionUsage>;
+  recentWorkspaces(): Promise<Workspace[]>;
+  openWorkspace(path: string): Promise<Workspace>;
+  forgetWorkspace(id: string): Promise<void>;
+  workspace(id: string): Promise<Workspace | null>;
+  projectFiles(workspaceId: string): Promise<string[]>;
+  /** Native folder picker; null if cancelled. */
+  pickFolder(): Promise<string | null>;
   setAgentModel(
     id: SessionId,
     credentialId: string,
@@ -114,9 +139,24 @@ export const tauriBridge: Bridge = {
   addCredential: (req) => commands.credentialAdd(req),
   deleteCredential: (id) => done(commands.credentialDelete(id)),
   listModels: (id) => commands.modelsList(id),
-  agentSessions: () => commands.agentSessions(),
+  agentSessions: (w) => commands.agentSessions(w),
   agentSession: (id) => commands.agentSession(id),
-  createAgentSession: (c, m) => commands.agentSessionCreate(c, m),
+  createAgentSession: (w, c, m) => commands.agentSessionCreate(w, c, m),
+  setAgentMode: (id, plan) => done(commands.agentSetMode(id, plan)),
+  renameAgentSession: (id, t) => done(commands.agentRename(id, t)),
+  deleteAgentSession: (id) => done(commands.agentDelete(id)),
+  agentInit: (id) => done(commands.agentInit(id)),
+  agentApprove: (c, k, f) => commands.agentApprove(c, k, f),
+  agentUsage: (id) => commands.agentUsage(id),
+  recentWorkspaces: () => commands.workspacesRecent(),
+  openWorkspace: (p) => commands.workspaceOpen(p),
+  forgetWorkspace: (id) => done(commands.workspaceForget(id)),
+  workspace: (id) => commands.workspaceGet(id),
+  projectFiles: (w) => commands.projectFiles(w),
+  pickFolder: async () => {
+    const r = await openDialog({ directory: true, multiple: false });
+    return typeof r === "string" ? r : null;
+  },
   setAgentModel: (id, c, m, r) => done(commands.agentSetModel(id, c, m, r)),
   agentTranscript: (id) => commands.agentTranscript(id),
   agentSend: (id, text) => done(commands.agentSend(id, text)),

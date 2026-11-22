@@ -13,6 +13,7 @@ import type { AppEvent, Block, Bridge, TerminalId } from "../../bridge";
 import { t } from "../../i18n";
 import { isMac } from "../../keybindings";
 import { attach as attachToAgent } from "../../stores/agent";
+import { project } from "../../stores/project";
 import { config, fontFamily, theme } from "../../stores/settings";
 import { showToast } from "../../stores/toast";
 import { BlockHeader } from "./BlockHeader";
@@ -162,6 +163,7 @@ export class TerminalController implements TerminalView {
         {
           shellId: this.opts.shellId,
           agentId: this.opts.agentId,
+          cwd: project()?.path,
           cols: term.cols,
           rows: term.rows,
         },

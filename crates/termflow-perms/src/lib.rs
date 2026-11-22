@@ -1,4 +1,4 @@
-//! Permission rules (BUILD_PROMPT §6.4): ordered, **last matching rule wins**, effects
+//! Permission rules (`BUILD_PROMPT` §6.4): ordered, **last matching rule wins**, effects
 //! allow / ask / deny. A configured `deny` can never be overridden by a session grant.
 //! Plan mode rejects mutating calls here, in the perms layer, not just in the prompt.
 
@@ -386,7 +386,7 @@ mod tests {
         );
     }
 
-    /// BUILD_PROMPT §12 M2 acceptance: in Plan mode every mutating call is rejected at the perms layer.
+    /// `BUILD_PROMPT` §12 M2 acceptance: in Plan mode every mutating call is rejected at the perms layer.
     #[test]
     fn plan_mode_rejects_every_mutation() {
         let mut g = SessionGrants::default();
@@ -430,6 +430,10 @@ mod tests {
 
     #[test]
     fn last_match_wins_and_config_parses() {
+        #[derive(Deserialize)]
+        struct C {
+            permissions: Vec<Rule>,
+        }
         let toml_rules = r#"
 [[permissions]]
 tool = "bash"
@@ -441,10 +445,6 @@ tool = ["write","edit"]
 path = "**/generated/**"
 effect = "deny"
 "#;
-        #[derive(Deserialize)]
-        struct C {
-            permissions: Vec<Rule>,
-        }
         let extra: C = toml::from_str(toml_rules).unwrap();
         let mut rules = default_rules();
         rules.extend(extra.permissions);

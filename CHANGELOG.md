@@ -4,6 +4,13 @@ All notable changes to this project. Format: Keep a Changelog; versions follow S
 
 ## [Unreleased]
 
+### Added (M2b — Tools, agent loop, chat-first)
+- **Chat-first layout** (decision 0001): start screen with recent projects, sidebar of chats per project, terminal as a toggleable panel (Cmd/Ctrl+J) that opens in the project folder.
+- The agent works in the project folder with 11 tools: read, write, edit, apply_patch (V4A), bash, grep, glob, ls, todo, attach_block, webfetch.
+- Permission rules (Balanced defaults, deny list, `[[permissions]]` in config) with approval cards that show the exact diff or command; Plan mode is read-only, enforced in the permission layer.
+- Project instructions (AGENTS.md/CLAUDE.md/.termflow/rules), environment summary, `@file` and `@block` mentions, slash commands (`/plan /build /model /clear /attach /init /cost /help`).
+- A tool call never runs twice; calls interrupted by a crash are reported, not re-run.
+
 ### Added (M2a — Models and chat)
 - Provider connections: Anthropic, OpenAI, OpenRouter, Ollama, or any custom endpoint (OpenAI Chat / Responses / Anthropic format). API keys live only in the OS keychain.
 - Canonical transcript (append-only, provider-native reasoning kept verbatim) with crash recovery to the last finished turn.

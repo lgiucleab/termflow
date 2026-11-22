@@ -1,4 +1,4 @@
-//! The agent (BUILD_PROMPT §6.1): model → tool calls → permissions → execute → tool results →
+//! The agent (`BUILD_PROMPT` §6.1): model → tool calls → permissions → execute → tool results →
 //! repeat, until a final answer, Esc, or the step limit. Every model call goes through the
 //! router; every tool call goes through `termflow-perms` first.
 
@@ -407,7 +407,8 @@ impl Chat {
     }
 
     /// One model round-trip. Returns the committed assistant turn, or None if it failed.
-    #[allow(clippy::too_many_arguments)]
+    // One linear streaming flow (send → accumulate → commit/discard); splitting it would scatter it.
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     async fn model_turn(
         &self,
         id: SessionId,
@@ -611,6 +612,7 @@ impl Chat {
     }
 
     /// Permissions → (approval) → execute one call, exactly once.
+    #[allow(clippy::too_many_lines)] // the call's whole lifecycle, read top to bottom
     async fn call(
         &self,
         id: SessionId,

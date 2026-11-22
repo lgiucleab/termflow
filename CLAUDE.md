@@ -55,13 +55,16 @@ Untestable-here behaviour goes in `docs/MANUAL_TEST_CHECKLIST.md`.
 - `crates/termflow-router` — every model call; M2 pass-through + attempt log; fallback in M3
 - `crates/termflow-catalog` — model catalog (M3)
 - `tests/mock-provider` + `tests/fixtures/http` — scriptable fake provider; fixtures written from docs
-- `crates/termflow-agent` — chat sessions over the transcript (M2a); tools/loop in M2b
-- `crates/termflow-{tools,perms,context,snapshots}` — agent tools (M2b/M4)
+- `crates/termflow-agent` — agent loop, approvals, exec guard; prompts in `prompts/`
+- `crates/termflow-tools` — the 11 built-in tools (V4A patch parser in `patch.rs`)
+- `crates/termflow-perms` — ordered allow/ask/deny rules, Plan mode
+- `crates/termflow-context` — AGENTS.md/CLAUDE.md discovery, env summary, @file
+- `crates/termflow-snapshots` — undo/redo (M4)
 - `crates/termflow-{mcp,acp,sandbox,worktrees,daemon}`, `apps/cli` — v1 stubs
 - `apps/desktop/src-tauri` — Tauri glue only
 - `apps/desktop/ui/src/bridge` — the only code that calls Tauri; `generated/` is tauri-specta output
 - `apps/desktop/ui/src/features/terminal` — xterm controller (outlives components), block headers; `layout/` pure tab/split model
 
 ## Status
-Current milestone: **M2a — Models and chat** (`docs/specs/M2.md`). M0 and M1 done (M1 PR #1).
+Current milestone: **M2b — Tools and agent loop** (`docs/specs/M2.md`). M0, M1, M2a done (PRs #1, #2).
 Known issues: see the spec's "Known issues" section.

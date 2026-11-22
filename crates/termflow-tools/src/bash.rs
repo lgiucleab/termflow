@@ -2,6 +2,7 @@
 //! cwd = project root, with a timeout and an output cap. On timeout or Esc the whole process
 //! group (Unix) / process tree (Windows) is killed.
 
+use std::fmt::Write as _;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 
@@ -15,7 +16,7 @@ const MAX_TIMEOUT: Duration = Duration::from_secs(600);
 /// Bytes kept from a command's output (head + tail) for the DB; the model gets less.
 const KEEP: usize = 1024 * 1024;
 
-/// Commands that only read (BUILD_PROMPT §6.4 allowlist). Anything with shell control operators,
+/// Commands that only read (`BUILD_PROMPT` §6.4 allowlist). Anything with shell control operators,
 /// redirection or substitution is never considered read-only.
 const READ_ONLY_PREFIXES: &[&str] = &[
     "git status",
@@ -124,7 +125,7 @@ impl Capped {
     fn text(&self) -> String {
         let mut s = String::from_utf8_lossy(&self.head).into_owned();
         if self.dropped > 0 {
-            s.push_str(&format!("\n[… {} bytes of output omitted …]\n", self.dropped));
+            let _ = write!(s, "\n[… {} bytes of output omitted …]\n", self.dropped);
         }
         s.push_str(&String::from_utf8_lossy(&self.tail.iter().copied().collect::<Vec<_>>()));
         s
@@ -250,6 +251,7 @@ impl Tool for Bash {
 }
 
 #[cfg(all(test, unix))]
+#[allow(clippy::unwrap_used)] // test code
 mod tests {
     use super::*;
 

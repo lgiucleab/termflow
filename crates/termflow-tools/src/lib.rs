@@ -1,4 +1,4 @@
-//! Built-in agent tools (BUILD_PROMPT §6.2). Tools never decide permissions — `termflow-perms`
+//! Built-in agent tools (`BUILD_PROMPT` §6.2). Tools never decide permissions — `termflow-perms`
 //! does, before `run` is called. Every tool can show what it would change (`preview`) so the
 //! approval card displays the exact diff or command.
 

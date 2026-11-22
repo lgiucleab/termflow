@@ -343,6 +343,8 @@ fn render_diffs(ctx: &ToolCtx, files: &BTreeMap<PathBuf, (Option<String>, Option
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Write as _;
+
     use super::*;
     use proptest::prelude::*;
 
@@ -408,7 +410,11 @@ mod tests {
             let hi = (idx + 3).min(lines.len());
             let mut patch = String::from("*** Begin Patch\n*** Update File: f\n");
             for (i, l) in lines.iter().enumerate().take(hi).skip(lo) {
-                if i == idx { patch.push_str(&format!("-{l}\n+{repl}\n")); } else { patch.push_str(&format!(" {l}\n")); }
+                if i == idx {
+                    let _ = write!(patch, "-{l}\n+{repl}\n");
+                } else {
+                    let _ = writeln!(patch, " {l}");
+                }
             }
             patch.push_str("*** End Patch");
             let ops = parse(&patch).unwrap();

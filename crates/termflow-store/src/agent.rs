@@ -422,7 +422,7 @@ pub fn native_ids(
     Ok(rows.collect::<Result<_, _>>()?)
 }
 
-/// Sum of tokens over a session's attempts: (input, output, cache_read, cache_write, reasoning, requests).
+/// Sum of tokens over a session's attempts: `(input, output, cache_read, cache_write, reasoning, requests)`.
 pub fn session_usage(conn: &Connection, session: SessionId) -> Result<(i64, i64, i64, i64, i64, i64), StoreError> {
     Ok(conn.query_row(
         "SELECT COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(cache_read_tokens),0),

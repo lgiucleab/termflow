@@ -35,7 +35,7 @@ async fn setup(mock: &MockProvider) -> (tempfile::TempDir, Store, Router) {
 async fn req(store: &Store) -> RouteRequest {
     let session = SessionId::new();
     store
-        .write(move |c| termflow_store::agent::create_session(c, session, Some("c1"), None))
+        .write(move |c| termflow_store::agent::create_session(c, session, None, Some("c1"), None))
         .await
         .unwrap();
     RouteRequest {
