@@ -1,6 +1,6 @@
 # TermFlow
 
-TermFlow (by Flow Labs) is a cross-platform, **chat-first** desktop coding agent (like OpenCode): you open a project folder and chat with a provider-agnostic agent that runs terminal commands as tools. A block-based terminal is a secondary panel. An in-app model router keeps a session going across models when one hits a limit or fails. See `docs/decisions/` for decisions that override the brief (0001: chat-first).
+TermFlow (by Flow Labs) is one coding tool: an OpenCode-style agent and a Warp-style block terminal in a **single unified timeline** (one input box: shell commands become blocks, plain language goes to the agent), with a minimal **monochrome** UI. You open a project folder; an in-app model router keeps a session going across models when one hits a limit or fails. Decisions that override the brief live in `docs/decisions/` (0001 projects, 0002 unified stream + mono).
 The full product spec is `docs/BUILD_PROMPT.md` — it is the source of truth; read the relevant section before any milestone work.
 
 ## Stack
