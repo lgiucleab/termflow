@@ -157,4 +157,6 @@ fn transport(e: &reqwest::Error) -> ProviderError {
 }
 
 #[cfg(test)]
+mod prop_tests;
+#[cfg(test)]
 mod tests;

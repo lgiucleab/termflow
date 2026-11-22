@@ -105,6 +105,11 @@ impl App {
         )?;
         tracing::info!(data_dir = %paths.data_dir.display(), "core started");
         let router = Arc::new(Router::new(store.clone(), secrets.clone()));
+        router.set_profiles(config.profiles.clone());
+        let route_bus = bus.clone();
+        router.set_event_sink(Arc::new(move |ev| {
+            let _ = route_bus.send(ev); // no subscribers yet is fine
+        }));
         let mut rules = termflow_perms::default_rules();
         rules.extend(config.permissions.iter().cloned());
         let blocks_store = store.clone();
@@ -167,6 +172,19 @@ impl App {
 
     pub fn chat(&self) -> &Chat {
         &self.chat
+    }
+
+    /// Load the model catalog (cache first; models.dev at most daily, once a provider exists).
+    pub async fn refresh_catalog(&self) {
+        let allow = self.config.catalog.fetch != Some(false);
+        self.chat
+            .router()
+            .load_catalog(&self.config.catalog.overrides, allow)
+            .await;
+    }
+
+    pub fn profiles(&self) -> Vec<String> {
+        self.chat.router().profile_names()
     }
 
     pub fn credentials(&self) -> Result<Vec<Credential>, CoreError> {
@@ -257,6 +275,7 @@ impl App {
     }
 
     pub async fn delete_credential(&self, id: String) -> Result<(), CoreError> {
+        self.chat.router().clear_credential_block(&id).await;
         self.secrets.delete(&id)?;
         self.store
             .write(move |c| termflow_store::agent::delete_credential(c, &id))

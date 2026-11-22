@@ -91,6 +91,56 @@ pub enum AppEvent {
     ToolRunning { session_id: SessionId, call_id: CallId },
     /// The agent loop finished (final answer, error, cancel, or step limit).
     AgentIdle { session_id: SessionId },
+    /// The router moved this chat's request to another model (`BUILD_PROMPT` §7.8).
+    RouteSwitched {
+        session_id: SessionId,
+        from: String,
+        to: String,
+        /// `ErrorClass` name of the failure that caused the switch, or `rate_limit_headers`.
+        reason: String,
+        /// When the model we left is expected back.
+        #[cfg_attr(feature = "specta", specta(type = Option<String>))]
+        until: Option<Timestamp>,
+    },
+    /// Waiting before retrying the same model.
+    RouteWaiting {
+        session_id: SessionId,
+        target: String,
+        seconds: u32,
+    },
+    /// Every candidate is unavailable. The chat resumes by itself at `resume_at` when set.
+    RoutePaused {
+        session_id: SessionId,
+        #[cfg_attr(feature = "specta", specta(type = Option<String>))]
+        resume_at: Option<Timestamp>,
+        candidates: Vec<CandidateState>,
+    },
+    /// Spend reached the warning share of a budget.
+    BudgetWarning {
+        session_id: SessionId,
+        scope: String,
+        spent_usd: f64,
+        limit_usd: f64,
+    },
+    /// A hard budget limit was reached; the agent paused. Nothing switched to another paid model.
+    BudgetStopped {
+        session_id: SessionId,
+        scope: String,
+        spent_usd: f64,
+        limit_usd: f64,
+    },
+}
+
+/// One fallback candidate as shown on the "All models unavailable" panel.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct CandidateState {
+    /// `provider/model@credential-label`.
+    pub target: String,
+    /// `ok`, `cooling`, `quota`, `auth`, `unfit`, …
+    pub state: String,
+    #[cfg_attr(feature = "specta", specta(type = Option<String>))]
+    pub until: Option<Timestamp>,
 }
 
 /// Request/response format a provider speaks.
@@ -188,6 +238,9 @@ pub struct AgentSession {
     pub reasoning: bool,
     #[cfg_attr(feature = "specta", specta(type = String))]
     pub updated_at: Timestamp,
+    /// Fallback profile this chat follows; `None` = the pinned model only.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// Which family a shell belongs to; decides how shell integration is injected.

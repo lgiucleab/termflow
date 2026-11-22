@@ -33,6 +33,10 @@ export const commands = {
 	agentSession: (id: SessionId, options?: InvokeOptions) => __TAURI_INVOKE<AgentSession_Serialize>("agent_session", { id }, options),
 	agentSessionCreate: (workspaceId: string | null, credentialId: string | null, model: string | null, options?: InvokeOptions) => __TAURI_INVOKE<AgentSession_Serialize>("agent_session_create", { workspaceId, credentialId, model }, options),
 	agentSetModel: (id: SessionId, credentialId: string, model: string, reasoning: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("agent_set_model", { id, credentialId, model, reasoning }, options),
+	/**  Make a chat follow a fallback profile, or `None` to go back to its pinned model. */
+	agentSetProfile: (id: SessionId, profile: string | null, options?: InvokeOptions) => __TAURI_INVOKE<null>("agent_set_profile", { id, profile }, options),
+	/**  Fallback profiles from `[profiles.*]` in the config. */
+	profilesList: (options?: InvokeOptions) => __TAURI_INVOKE<string[]>("profiles_list", undefined, options),
 	agentTranscript: (id: SessionId, options?: InvokeOptions) => __TAURI_INVOKE<Turn_Serialize[]>("agent_transcript", { id }, options),
 	agentSend: (id: SessionId, text: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("agent_send", { id, text }, options),
 	agentCancel: (id: SessionId, options?: InvokeOptions) => __TAURI_INVOKE<void>("agent_cancel", { id }, options),
@@ -101,6 +105,8 @@ export type AgentSession_Deserialize = {
 	model?: string | null,
 	reasoning: boolean,
 	updated_at: string,
+	/**  Fallback profile this chat follows; `None` = the pinned model only. */
+	profile?: string | null,
 };
 
 /**  An agent chat session as listed in the UI. */
@@ -114,6 +120,8 @@ export type AgentSession_Serialize = {
 	model: string | null,
 	reasoning: boolean,
 	updated_at: string,
+	/**  Fallback profile this chat follows; `None` = the pinned model only. */
+	profile: string | null,
 };
 
 /**  Events published on the core event bus; the UI subscribes to them. */
@@ -144,7 +152,21 @@ preview?: string | null } |
 /**  A tool call started executing. */
 { type: "tool_running"; session_id: SessionId; call_id: CallId } | 
 /**  The agent loop finished (final answer, error, cancel, or step limit). */
-{ type: "agent_idle"; session_id: SessionId };
+{ type: "agent_idle"; session_id: SessionId } | 
+/**  The router moved this chat's request to another model (`BUILD_PROMPT` §7.8). */
+{ type: "route_switched"; session_id: SessionId; from: string; to: string; 
+/**  `ErrorClass` name of the failure that caused the switch, or `rate_limit_headers`. */
+reason: string; 
+/**  When the model we left is expected back. */
+until?: string | null } | 
+/**  Waiting before retrying the same model. */
+{ type: "route_waiting"; session_id: SessionId; target: string; seconds: number } | 
+/**  Every candidate is unavailable. The chat resumes by itself at `resume_at` when set. */
+{ type: "route_paused"; session_id: SessionId; resume_at?: string | null; candidates: CandidateState_Deserialize[] } | 
+/**  Spend reached the warning share of a budget. */
+{ type: "budget_warning"; session_id: SessionId; scope: string; spent_usd: number | null; limit_usd: number | null } | 
+/**  A hard budget limit was reached; the agent paused. Nothing switched to another paid model. */
+{ type: "budget_stopped"; session_id: SessionId; scope: string; spent_usd: number | null; limit_usd: number | null };
 
 /**  Events published on the core event bus; the UI subscribes to them. */
 export type AppEvent_Serialize = 
@@ -171,7 +193,21 @@ preview: string | null } |
 /**  A tool call started executing. */
 { type: "tool_running"; session_id: SessionId; call_id: CallId } | 
 /**  The agent loop finished (final answer, error, cancel, or step limit). */
-{ type: "agent_idle"; session_id: SessionId };
+{ type: "agent_idle"; session_id: SessionId } | 
+/**  The router moved this chat's request to another model (`BUILD_PROMPT` §7.8). */
+{ type: "route_switched"; session_id: SessionId; from: string; to: string; 
+/**  `ErrorClass` name of the failure that caused the switch, or `rate_limit_headers`. */
+reason: string; 
+/**  When the model we left is expected back. */
+until: string | null } | 
+/**  Waiting before retrying the same model. */
+{ type: "route_waiting"; session_id: SessionId; target: string; seconds: number } | 
+/**  Every candidate is unavailable. The chat resumes by itself at `resume_at` when set. */
+{ type: "route_paused"; session_id: SessionId; resume_at: string | null; candidates: CandidateState_Serialize[] } | 
+/**  Spend reached the warning share of a budget. */
+{ type: "budget_warning"; session_id: SessionId; scope: string; spent_usd: number | null; limit_usd: number | null } | 
+/**  A hard budget limit was reached; the agent paused. Nothing switched to another paid model. */
+{ type: "budget_stopped"; session_id: SessionId; scope: string; spent_usd: number | null; limit_usd: number | null };
 
 /**  Basic information about the running app, shown in the UI. */
 export type AppInfo = {
@@ -237,6 +273,27 @@ export type Block_Serialize = {
 };
 
 export type CallId = string;
+
+/**  One fallback candidate as shown on the "All models unavailable" panel. */
+export type CandidateState = CandidateState_Serialize | CandidateState_Deserialize;
+
+/**  One fallback candidate as shown on the "All models unavailable" panel. */
+export type CandidateState_Deserialize = {
+	/**  `provider/model@credential-label`. */
+	target: string,
+	/**  `ok`, `cooling`, `quota`, `auth`, `unfit`, … */
+	state: string,
+	until?: string | null,
+};
+
+/**  One fallback candidate as shown on the "All models unavailable" panel. */
+export type CandidateState_Serialize = {
+	/**  `provider/model@credential-label`. */
+	target: string,
+	/**  `ok`, `cooling`, `quota`, `auth`, `unfit`, … */
+	state: string,
+	until: string | null,
+};
 
 export type Config = Config_Serialize | Config_Deserialize;
 

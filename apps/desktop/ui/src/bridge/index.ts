@@ -103,6 +103,10 @@ export interface Bridge {
     model: string,
     reasoning: boolean,
   ): Promise<void>;
+  /** Fallback profiles from the config (`[profiles.*]`). */
+  listProfiles(): Promise<string[]>;
+  /** Follow a profile, or `null` to use the pinned model only. */
+  setAgentProfile(id: SessionId, profile: string | null): Promise<void>;
   agentTranscript(id: SessionId): Promise<Turn[]>;
   agentSend(id: SessionId, text: string): Promise<void>;
   agentCancel(id: SessionId): Promise<void>;
@@ -167,6 +171,8 @@ export const tauriBridge: Bridge = {
     return typeof r === "string" ? r : null;
   },
   setAgentModel: (id, c, m, r) => done(commands.agentSetModel(id, c, m, r)),
+  listProfiles: () => commands.profilesList(),
+  setAgentProfile: (id, p) => done(commands.agentSetProfile(id, p)),
   agentTranscript: (id) => commands.agentTranscript(id),
   agentSend: (id, text) => done(commands.agentSend(id, text)),
   agentCancel: (id) => done(commands.agentCancel(id)),

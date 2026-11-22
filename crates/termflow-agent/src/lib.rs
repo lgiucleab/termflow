@@ -14,7 +14,7 @@ use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use termflow_perms::{Decision, Mode, Rule, SessionGrants};
 use termflow_providers::ToolSpec;
-use termflow_router::{RouteError, RouteRequest, Router};
+use termflow_router::{RouteError, RouteRequest, RouteTarget, Router};
 use termflow_store::Store;
 use termflow_tools::{BlockLookup, Todo, Tool, ToolCtx, ToolOutput};
 use termflow_types::{
@@ -157,8 +157,20 @@ impl Chat {
         model: String,
         reasoning: bool,
     ) -> Result<(), AgentError> {
+        // Picking a model pins it: the chat leaves its fallback profile.
         self.store()
-            .write(move |c| termflow_store::agent::set_session_model(c, id, &credential_id, &model, reasoning))
+            .write(move |c| {
+                termflow_store::agent::set_session_model(c, id, &credential_id, &model, reasoning)?;
+                termflow_store::route::set_session_profile(c, id, None)
+            })
+            .await?;
+        Ok(())
+    }
+
+    /// Follow a fallback profile (`None` = back to the pinned model).
+    pub async fn set_profile(&self, id: SessionId, profile: Option<String>) -> Result<(), AgentError> {
+        self.store()
+            .write(move |c| termflow_store::route::set_session_profile(c, id, profile.as_deref()))
             .await?;
         Ok(())
     }
@@ -221,8 +233,13 @@ impl Chat {
     /// Commit the user's message (expanding `@file` mentions), then run the agent in the background.
     pub async fn send(&self, id: SessionId, text: String) -> Result<(), AgentError> {
         let session = self.session(id)?;
-        let (Some(credential_id), Some(model)) = (session.credential_id.clone(), session.model.clone()) else {
-            return Err(AgentError::NoModel);
+        let target = match (&session.profile, &session.credential_id, &session.model) {
+            (Some(p), ..) => RouteTarget::Profile(p.clone()),
+            (None, Some(c), Some(m)) => RouteTarget::Pinned {
+                credential_id: c.clone(),
+                model: m.clone(),
+            },
+            _ => return Err(AgentError::NoModel),
         };
         let cancel = CancellationToken::new();
         {
@@ -270,7 +287,7 @@ impl Chat {
         self.emit(AppEvent::AgentTurnCommitted { turn: user });
         let me = self.clone();
         tokio::spawn(async move {
-            me.run(session, credential_id, model, root, cancel).await;
+            me.run(session, target, root, cancel).await;
             lock(&me.0.running).remove(&id);
             lock(&me.0.grants).entry(id).or_default(); // keep session grants for the next message
             me.emit(AppEvent::AgentIdle { session_id: id });
@@ -331,14 +348,7 @@ impl Chat {
             .collect()
     }
 
-    async fn run(
-        &self,
-        session: AgentSession,
-        credential_id: String,
-        model: String,
-        root: Option<PathBuf>,
-        cancel: CancellationToken,
-    ) {
+    async fn run(&self, session: AgentSession, target: RouteTarget, root: Option<PathBuf>, cancel: CancellationToken) {
         let id = session.id;
         let mode = mode_of(&session);
         let system = match &root {
@@ -353,15 +363,7 @@ impl Chat {
         let tools = if root.is_some() { self.tool_specs() } else { vec![] };
         for step in 0..MAX_STEPS {
             let Some(turn) = self
-                .model_turn(
-                    id,
-                    &credential_id,
-                    &model,
-                    session.reasoning,
-                    &system,
-                    tools.clone(),
-                    &cancel,
-                )
+                .model_turn(id, &target, session.reasoning, &system, tools.clone(), &cancel)
                 .await
             else {
                 return; // error, cancel, or no output: already reported
@@ -406,24 +408,60 @@ impl Chat {
         }
     }
 
-    /// One model round-trip. Returns the committed assistant turn, or None if it failed.
-    // One linear streaming flow (send → accumulate → commit/discard); splitting it would scatter it.
-    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+    /// One model step. A failure after the stream started is handed off: the partial turn is
+    /// discarded and the router is asked again from the last committed turn, without the
+    /// target that failed (`BUILD_PROMPT` §7.7 rule 3). The user retypes nothing.
     async fn model_turn(
         &self,
         id: SessionId,
-        credential_id: &str,
-        model: &str,
+        target: &RouteTarget,
         reasoning: bool,
         system: &str,
         tools: Vec<ToolSpec>,
         cancel: &CancellationToken,
     ) -> Option<Turn> {
+        let mut exclude = Vec::new();
+        for handoff in 0..=MAX_HANDOFFS {
+            match self
+                .model_turn_once(
+                    id,
+                    target,
+                    &exclude,
+                    // A pinned model keeps the M2 behaviour: the error is shown, nothing re-sent.
+                    matches!(target, RouteTarget::Profile(_)) && handoff < MAX_HANDOFFS,
+                    reasoning,
+                    system,
+                    tools.clone(),
+                    cancel,
+                )
+                .await
+            {
+                Step::Done(t) => return t,
+                Step::Handoff(key) => exclude.push(key),
+            }
+        }
+        None
+    }
+
+    /// One model round-trip.
+    // One linear streaming flow (send → accumulate → commit/discard); splitting it would scatter it.
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+    async fn model_turn_once(
+        &self,
+        id: SessionId,
+        target: &RouteTarget,
+        exclude: &[termflow_router::health::TargetKey],
+        may_handoff: bool,
+        reasoning: bool,
+        system: &str,
+        tools: Vec<ToolSpec>,
+        cancel: &CancellationToken,
+    ) -> Step {
         let transcript = match self.transcript(id) {
             Ok(t) => t,
             Err(e) => {
                 self.fail(id, None, &ErrorClass::Unknown, &e.to_string());
-                return None;
+                return Step::Done(None);
             }
         };
         let mut turn = Turn::new(id, Role::Assistant, vec![], TurnStatus::Partial);
@@ -434,24 +472,24 @@ impl Chat {
             .await
         {
             self.fail(id, None, &ErrorClass::Unknown, &e.to_string());
-            return None;
+            return Step::Done(None);
         }
         let req = RouteRequest {
             session: id,
             turn: turn.id,
-            credential_id: credential_id.into(),
-            model: model.into(),
+            target: target.clone(),
             transcript,
             system: system.into(),
             max_tokens: MAX_TOKENS,
             reasoning,
             tools,
+            exclude: exclude.to_vec(),
         };
         let mut route = match self.0.router.stream(req, cancel.clone()).await {
             Ok(r) => r,
             Err(e) => {
                 self.discard(&turn, e.class(), &e.to_string()).await;
-                return None;
+                return Step::Done(None);
             }
         };
         self.emit(AppEvent::AgentTurnStarted {
@@ -462,7 +500,7 @@ impl Chat {
         let mut b = PartsBuilder {
             family: route.family.clone(),
             scope: route.credential_scope.clone(),
-            model: model.into(),
+            model: route.served.model.clone(),
             ..Default::default()
         };
         let mut outcome: Result<(), (ErrorClass, String)> = Err((ErrorClass::Unknown, "stream ended early".into()));
@@ -491,6 +529,7 @@ impl Chat {
         }
         let natives = std::mem::take(&mut b.natives);
         turn.parts = b.finish();
+        let issuer = route.served.credential_id.clone().unwrap_or_default();
         turn.served_by = Some(route.served);
         match outcome {
             Ok(()) => {
@@ -507,7 +546,7 @@ impl Chat {
                         _ => None,
                     })
                     .collect();
-                self.commit(turn, calls, credential_id).await
+                Step::Done(self.commit(turn, calls, &issuer).await)
             }
             // Esc: keep what was written as plain text (no half reasoning/tool calls) (§6.1).
             Err((ErrorClass::Cancelled, _)) => {
@@ -518,13 +557,20 @@ impl Chat {
                     turn.parts.push(Part::Text {
                         text: "\n\n[cancelled]".into(),
                     });
-                    self.commit(turn, vec![], credential_id).await;
+                    self.commit(turn, vec![], &issuer).await;
                 }
-                None
+                Step::Done(None)
+            }
+            // Mid-stream failure: drop the partial turn (kept in the DB as Discarded) and let the
+            // router pick another target. Tools never ran for it: calls run only after commit.
+            Err((class, msg)) if may_handoff && termflow_router::handoff_on(&class) => {
+                tracing::info!(session = %id, class = class.name(), %msg, "mid-stream failure; handing off");
+                self.mark_discarded(turn.id).await;
+                Step::Handoff(route.key)
             }
             Err((class, msg)) => {
                 self.discard(&turn, class, &msg).await;
-                None
+                Step::Done(None)
             }
         }
     }
@@ -725,7 +771,11 @@ impl Chat {
     }
 
     async fn discard(&self, turn: &Turn, class: ErrorClass, msg: &str) {
-        let id = turn.id;
+        self.mark_discarded(turn.id).await;
+        self.fail(turn.session_id, Some(turn.id), &class, msg);
+    }
+
+    async fn mark_discarded(&self, id: termflow_types::TurnId) {
         if let Err(e) = self
             .store()
             .write(move |c| termflow_store::agent::set_turn_status(c, id, TurnStatus::Discarded))
@@ -733,7 +783,6 @@ impl Chat {
         {
             tracing::warn!(error = %e, "discarding turn failed");
         }
-        self.fail(turn.session_id, Some(turn.id), &class, msg);
     }
 
     fn fail(&self, session_id: SessionId, turn_id: Option<termflow_types::TurnId>, class: &ErrorClass, msg: &str) {
@@ -745,6 +794,14 @@ impl Chat {
             message: msg.into(),
         });
     }
+}
+
+/// Hand-offs per step before the error is shown.
+const MAX_HANDOFFS: usize = 2;
+
+enum Step {
+    Done(Option<Turn>),
+    Handoff(termflow_router::health::TargetKey),
 }
 
 fn default_shell() -> &'static str {

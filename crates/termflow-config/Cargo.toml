@@ -19,6 +19,7 @@ schemars.workspace = true
 thiserror.workspace = true
 directories.workspace = true
 termflow-perms.workspace = true
+termflow-catalog.workspace = true
 specta = { workspace = true, optional = true }
 
 [features]

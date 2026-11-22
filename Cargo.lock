@@ -5343,6 +5343,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "termflow-config",
  "termflow-context",
  "termflow-perms",
  "termflow-providers",
@@ -5360,6 +5361,13 @@ dependencies = [
 [[package]]
 name = "termflow-catalog"
 version = "0.1.0"
+dependencies = [
+ "schemars 1.2.3",
+ "serde",
+ "serde_json",
+ "termflow-types",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "termflow-cli"
@@ -5375,6 +5383,7 @@ dependencies = [
  "serde_json",
  "specta",
  "tempfile",
+ "termflow-catalog",
  "termflow-perms",
  "thiserror 2.0.21",
  "toml 0.9.12+spec-1.1.0",
@@ -5473,6 +5482,7 @@ dependencies = [
  "insta",
  "jiff 1.0.2",
  "mock-provider",
+ "proptest",
  "reqwest",
  "serde_json",
  "termflow-types",
@@ -5504,6 +5514,8 @@ dependencies = [
  "mock-provider",
  "serde_json",
  "tempfile",
+ "termflow-catalog",
+ "termflow-config",
  "termflow-providers",
  "termflow-secrets",
  "termflow-store",

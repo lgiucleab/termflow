@@ -52,8 +52,8 @@ Untestable-here behaviour goes in `docs/MANUAL_TEST_CHECKLIST.md`.
 - `crates/termflow-shell-integ` — OSC scanner, block tracker, injection; scripts in `shell-integration/`
 - `crates/termflow-terminal` — terminal sessions, batching, back-pressure, block persistence
 - `crates/termflow-providers` — adapters (anthropic, openai_responses, openai_chat, ollama), SSE/NDJSON, error classifier
-- `crates/termflow-router` — every model call; M2 pass-through + attempt log; fallback in M3
-- `crates/termflow-catalog` — model catalog (M3)
+- `crates/termflow-router` — every model call: profiles/chains, `policy` (action table), `health` (breaker + credential blocks), `select`, `estimate`, budgets, hand-off; `clock::FakeClock` for tests
+- `crates/termflow-catalog` — models.dev parser, overrides, `cost()` (cache kept in `catalog_cache`)
 - `tests/mock-provider` + `tests/fixtures/http` — scriptable fake provider; fixtures written from docs
 - `crates/termflow-agent` — agent loop, approvals, exec guard; prompts in `prompts/`
 - `crates/termflow-tools` — the 11 built-in tools (V4A patch parser in `patch.rs`)
@@ -66,5 +66,5 @@ Untestable-here behaviour goes in `docs/MANUAL_TEST_CHECKLIST.md`.
 - `apps/desktop/ui/src/features/chat` — unified timeline: `ChatView`, `chatShell` (shell per chat, live/frozen blocks), `splitter` (OSC/alt-screen), `classify` (command vs question)
 
 ## Status
-Current milestone: **M2c — Unified timeline and Mono** (`docs/specs/M2c.md`). M0, M1, M2a, M2b done. Next: M3 (router fallback).
+Current milestone: **M3 — Router with fallback** (`docs/specs/M3.md`): M3a (router core) built; M3b (switch UX) next. M0–M2c done.
 Known issues: see the spec's "Known issues" section.

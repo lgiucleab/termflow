@@ -28,6 +28,7 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+termflow-config.workspace = true
 mock-provider.workspace = true
 termflow-secrets.workspace = true
 tempfile.workspace = true

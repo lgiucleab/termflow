@@ -101,10 +101,11 @@ fn session_row(r: &Row<'_>) -> rusqlite::Result<AgentSession> {
         updated_at: parse(&r.get::<_, String>(5)?)?,
         workspace_id: r.get(6)?,
         mode: r.get::<_, Option<String>>(7)?.unwrap_or_else(|| "build".into()),
+        profile: r.get(8)?,
     })
 }
 
-const SESSION_COLS: &str = "id, title, credential_id, pinned_model, reasoning, updated_at, workspace_id, mode";
+const SESSION_COLS: &str = "id, title, credential_id, pinned_model, reasoning, updated_at, workspace_id, mode, profile";
 
 pub fn get_session(conn: &Connection, id: SessionId) -> Result<Option<AgentSession>, StoreError> {
     Ok(conn
@@ -469,13 +470,15 @@ pub struct AttemptEnd<'a> {
     pub ttft_ms: Option<u64>,
     pub usage: Usage,
     pub served_model: Option<&'a str>,
+    /// From catalog prices of the served model; `None` when the price is unknown.
+    pub cost_usd: Option<f64>,
 }
 
 pub fn finish_attempt(conn: &Connection, id: AttemptId, e: &AttemptEnd<'_>) -> Result<(), StoreError> {
     conn.execute(
         "UPDATE attempts SET ended_at = ?2, http_status = ?3, error_class = ?4, ttft_ms = ?5, input_tokens = ?6,
          output_tokens = ?7, cache_write_tokens = ?8, cache_read_tokens = ?9, reasoning_tokens = ?10,
-         model = COALESCE(?11, model) WHERE id = ?1",
+         model = COALESCE(?11, model), cost_usd = ?12 WHERE id = ?1",
         params![
             id.to_string(),
             jiff::Timestamp::now().to_string(),
@@ -488,6 +491,7 @@ pub fn finish_attempt(conn: &Connection, id: AttemptId, e: &AttemptEnd<'_>) -> R
             e.usage.cache_read,
             e.usage.reasoning,
             e.served_model,
+            e.cost_usd,
         ],
     )?;
     Ok(())

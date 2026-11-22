@@ -4,6 +4,13 @@ All notable changes to this project. Format: Keep a Changelog; versions follow S
 
 ## [Unreleased]
 
+### Added (M3a — Router with fallback)
+- **Fallback profiles** (`[profiles.<name>]`): a chat can follow an ordered chain of models across providers or your own distinct keys. Rate limits wait or move on, quota exhaustion moves on at once (blocked until the reset, remembered across restarts), outages retry with backoff then move on, oversized requests go to `on_context_overflow` or have old tool output trimmed, and refusals go to `on_content_policy`.
+- A failure mid-answer continues on the next model without retyping; tools that already ran are never run again.
+- Proactive switching from rate-limit headers, hysteresis before switching back, and an automatic pause/resume when every model is down.
+- Budgets per session/day/month with a hard stop that never silently switches to another paid model; every attempt is priced from the model that actually served it.
+- Model catalog from models.dev (cached, refreshed at most daily, only once a provider is configured) with `[catalog.overrides]`.
+
 ### Changed (M2c — Unified timeline, Mono)
 - **One timeline per chat** (decision 0002): shell commands and agent turns share one stream and one input box. Commands run in the chat's own shell and appear as Warp-style blocks (command, exit, duration, coloured output, copy/ask/re-run). Full-screen programs take over the timeline, and Cmd/Ctrl+J shows the classic terminal view.
 - The input auto-detects command vs question (`$` / `✦` glyph); `!`, `?` and Cmd/Ctrl+I override it. Commands run since the agent's last reply are attached to your next question as removable chips.

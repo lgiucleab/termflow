@@ -198,8 +198,8 @@ pub struct AddCredential {
 
 #[tauri::command]
 #[specta::specta]
-async fn credential_add(req: AddCredential, state: tauri::State<'_, State>) -> Res<Credential> {
-    state
+async fn credential_add(req: AddCredential, app: tauri::AppHandle, state: tauri::State<'_, State>) -> Res<Credential> {
+    let cred = state
         .core
         .add_credential(NewCredential {
             kind: req.kind,
@@ -209,7 +209,10 @@ async fn credential_add(req: AddCredential, state: tauri::State<'_, State>) -> R
             api_key: req.api_key,
         })
         .await
-        .map_err(err)
+        .map_err(err)?;
+    // The first provider enables the (daily) catalog fetch; don't hold up the dialog for it.
+    tauri::async_runtime::spawn(async move { app.state::<State>().core.refresh_catalog().await });
+    Ok(cred)
 }
 
 #[tauri::command]
@@ -274,6 +277,20 @@ async fn agent_set_model(
         .set_model(id, credential_id, model, reasoning)
         .await
         .map_err(err)
+}
+
+/// Make a chat follow a fallback profile, or `None` to go back to its pinned model.
+#[tauri::command]
+#[specta::specta]
+async fn agent_set_profile(id: SessionId, profile: Option<String>, state: tauri::State<'_, State>) -> Res<()> {
+    state.core.chat().set_profile(id, profile).await.map_err(err)
+}
+
+/// Fallback profiles from `[profiles.*]` in the config.
+#[tauri::command]
+#[specta::specta]
+fn profiles_list(state: tauri::State<'_, State>) -> Vec<String> {
+    state.core.profiles()
 }
 
 #[tauri::command]
@@ -455,6 +472,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             agent_session,
             agent_session_create,
             agent_set_model,
+            agent_set_profile,
+            profiles_list,
             agent_transcript,
             agent_send,
             agent_cancel,
@@ -531,6 +550,8 @@ pub fn run() -> anyhow::Result<()> {
                 core,
                 _log_guard: log_guard,
             });
+            let h = app.handle().clone();
+            tauri::async_runtime::spawn(async move { h.state::<State>().core.refresh_catalog().await });
             Ok(())
         })
         .run(tauri::generate_context!())?;

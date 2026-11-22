@@ -242,4 +242,20 @@ export const esES: Dict = {
     shell: "comando",
     agent: "agente",
   },
+  route: {
+    profile: "Perfil de respaldo",
+    profileHint:
+      "Un perfil pasa el chat al siguiente modelo cuando uno llega a un límite o falla. Elegir un modelo lo fija.",
+    pinned: "Modelo fijo",
+    switched: "{{ from }} no disponible ({{ reason }}) · se continúa con {{ to }}.",
+    backAround: "Vuelve hacia las {{ time }}.",
+    reasonHeaders: "cerca de su límite de uso",
+    waiting: "Límite de uso en {{ target }} · se reintenta en {{ seconds }} s.",
+    paused: "Ningún modelo de este perfil está disponible: {{ list }}.",
+    resumeAt: "Se reanuda solo a las {{ time }} (Esc para parar).",
+    noResume: "Elige un modelo o corrige las credenciales para continuar.",
+    budgetWarning: "Presupuesto ({{ scope }}): {{ spent }} de {{ limit }} usados.",
+    budgetStopped:
+      "Presupuesto ({{ scope }}) alcanzado ({{ spent }} de {{ limit }}). El agente se ha pausado y no se ha pasado a otro modelo de pago. Sube el presupuesto en el perfil para continuar.",
+  },
 };

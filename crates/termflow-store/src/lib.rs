@@ -2,6 +2,7 @@
 
 pub mod agent;
 pub mod blocks;
+pub mod route;
 pub mod settings;
 
 use std::path::{Path, PathBuf};
@@ -18,6 +19,7 @@ static MIGRATIONS: LazyLock<Migrations<'static>> = LazyLock::new(|| {
         M::up(include_str!("../migrations/0003_credentials.sql")),
         M::up(include_str!("../migrations/0004_projects_tools.sql")),
         M::up(include_str!("../migrations/0005_chat_blocks.sql")),
+        M::up(include_str!("../migrations/0006_router.sql")),
     ])
 });
 

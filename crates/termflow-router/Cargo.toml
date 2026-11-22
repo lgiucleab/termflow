@@ -16,6 +16,8 @@ termflow-types.workspace = true
 termflow-providers.workspace = true
 termflow-store.workspace = true
 termflow-secrets.workspace = true
+termflow-config.workspace = true
+termflow-catalog.workspace = true
 futures.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
@@ -23,8 +25,8 @@ tokio-util.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde_json.workspace = true
+jiff.workspace = true
 
 [dev-dependencies]
 mock-provider.workspace = true
 tempfile.workspace = true
-jiff.workspace = true

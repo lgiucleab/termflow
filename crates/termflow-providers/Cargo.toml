@@ -27,6 +27,7 @@ jiff.workspace = true
 ulid.workspace = true
 
 [dev-dependencies]
+proptest.workspace = true
 mock-provider.workspace = true
 insta.workspace = true
 tokio = { workspace = true }

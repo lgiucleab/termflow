@@ -15,6 +15,7 @@ publish = false
 # internal
 termflow-types = { path = "crates/termflow-types" }
 termflow-config = { path = "crates/termflow-config" }
+termflow-catalog = { path = "crates/termflow-catalog" }
 termflow-store = { path = "crates/termflow-store" }
 termflow-secrets = { path = "crates/termflow-secrets" }
 termflow-core = { path = "crates/termflow-core" }

@@ -1,5 +1,6 @@
 //! TOML config: load the global file, then the project file on top, and generate a JSON schema.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use schemars::JsonSchema;
@@ -17,6 +18,140 @@ pub struct Config {
     /// Extra `[[permissions]]` rules, applied after the built-in defaults (last match wins).
     #[cfg_attr(feature = "specta", specta(skip))]
     pub permissions: Vec<termflow_perms::Rule>,
+    /// Fallback profiles (`[profiles.<name>]`, `BUILD_PROMPT` §7.6).
+    #[cfg_attr(feature = "specta", specta(skip))]
+    pub profiles: BTreeMap<String, Profile>,
+    /// Scenario routes: which model runs background jobs, compaction, long context, vision.
+    #[cfg_attr(feature = "specta", specta(skip))]
+    pub routes: Routes,
+    #[cfg_attr(feature = "specta", specta(skip))]
+    pub catalog: CatalogConfig,
+}
+
+/// An ordered fallback chain plus how to move along it. Chain entries are
+/// `provider/model@credential-label` (`@…` optional for local providers).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, default)]
+pub struct Profile {
+    pub chain: Vec<String>,
+    /// Tried when a request is too large for the current model.
+    pub on_context_overflow: Vec<String>,
+    /// Tried when the current model refuses (pick another vendor).
+    pub on_content_policy: Vec<String>,
+    pub retry: RetryConfig,
+    /// After a switch, stay on the fallback for at least this many requests.
+    pub hysteresis_turns: u32,
+    pub switch_back: SwitchBack,
+    pub budget: BudgetConfig,
+    pub require: Require,
+    /// Tell the new model it is continuing another model's session (cross-vendor switches).
+    pub handoff_note: bool,
+}
+
+impl Default for Profile {
+    fn default() -> Self {
+        Self {
+            chain: Vec::new(),
+            on_context_overflow: Vec::new(),
+            on_content_policy: Vec::new(),
+            retry: RetryConfig::default(),
+            hysteresis_turns: 3,
+            switch_back: SwitchBack::WhenHealthy,
+            budget: BudgetConfig::default(),
+            require: Require::default(),
+            handoff_note: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, default)]
+pub struct RetryConfig {
+    /// Wait for a rate limit only if it lifts within this many seconds.
+    pub transient_max_wait_s: u64,
+    pub overloaded_retries: u32,
+}
+
+impl Default for RetryConfig {
+    fn default() -> Self {
+        Self {
+            transient_max_wait_s: 10,
+            overloaded_retries: 2,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SwitchBack {
+    /// Go back to the first model once it is healthy (after the hysteresis turns).
+    #[default]
+    WhenHealthy,
+    /// Stay on the fallback for the rest of the chat.
+    Never,
+}
+
+/// Spend limits in USD (catalog prices of the model that actually served each request).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, default)]
+pub struct BudgetConfig {
+    pub session_usd: Option<f64>,
+    pub day_usd: Option<f64>,
+    pub month_usd: Option<f64>,
+    /// Pause the agent at a limit instead of only warning.
+    pub hard_stop: bool,
+    /// Warn at this fraction of a limit.
+    pub warn_at: f64,
+}
+
+impl Default for BudgetConfig {
+    fn default() -> Self {
+        Self {
+            session_usd: None,
+            day_usd: None,
+            month_usd: None,
+            hard_stop: true,
+            warn_at: 0.8,
+        }
+    }
+}
+
+/// Capabilities every candidate must have; unknown capabilities don't disqualify.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, default)]
+pub struct Require {
+    pub tools: bool,
+    pub vision: bool,
+    pub reasoning: bool,
+}
+
+impl Default for Require {
+    fn default() -> Self {
+        Self {
+            tools: true,
+            vision: false,
+            reasoning: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, default)]
+pub struct Routes {
+    /// Chat titles and other background jobs.
+    pub background: Option<String>,
+    pub compaction: Option<String>,
+    pub long_context: Option<String>,
+    pub vision: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, default)]
+pub struct CatalogConfig {
+    /// Fetch models.dev daily (only once a provider is configured).
+    pub fetch: Option<bool>,
+    /// `"provider/model" = { context = 128000, price = { input = 1.0, output = 2.0 } }`
+    pub overrides: BTreeMap<String, termflow_catalog::Override>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -191,6 +326,26 @@ mod tests {
         assert_eq!(c.ui.locale.as_deref(), Some("es-ES"));
         assert_eq!(c.terminal.font_size, 15);
         assert!(c.updates.check);
+    }
+
+    #[test]
+    fn profiles_parse_with_defaults() {
+        let d = tempfile::tempdir().unwrap();
+        let g = write(
+            d.path(),
+            "g.toml",
+            "[profiles.main]\nchain = [\"anthropic/m@work\", \"ollama/local\"]\nbudget = { day_usd = 5.0 }\n[routes]\nbackground = \"ollama/local\"\n[catalog.overrides.\"ollama/local\"]\ncontext = 32000\n",
+        );
+        let c = load(&[&g]).unwrap();
+        let p = &c.profiles["main"];
+        assert_eq!(p.chain.len(), 2);
+        assert_eq!(
+            (p.hysteresis_turns, p.retry.overloaded_retries, p.budget.day_usd),
+            (3, 2, Some(5.0))
+        );
+        assert!(p.budget.hard_stop && p.require.tools && p.handoff_note);
+        assert_eq!(c.routes.background.as_deref(), Some("ollama/local"));
+        assert_eq!(c.catalog.overrides["ollama/local"].context, Some(32000));
     }
 
     #[test]

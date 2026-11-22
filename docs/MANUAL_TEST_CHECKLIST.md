@@ -60,3 +60,15 @@ For a no-key smoke test, run `cargo run -p mock-provider -- tests/fixtures/http/
 - [ ] Mono Dark is the default; Mono Light, Nord and the others switch from the palette and also recolour live blocks.
 - [ ] `yes | head -n 2000000` stays responsive and freezes into a block.
 - [ ] Windows (pwsh): blocks, alt-screen (`vim` via WSL or `edit`) and Ctrl+C work.
+
+## M3a: Router with fallback
+
+Setup: two providers (e.g. Anthropic + OpenAI) and a profile in `~/.config/termflow/termflow.toml` (see `docs/specs/M3.md` → Example). Restart the app.
+
+- [ ] The chat header shows the profile picker; choosing the profile and sending works, and the reply says which model served it.
+- [ ] Anthropic key at its spend limit (or revoke it): the next message continues on the second model at once, with a note "… unavailable (…) · continuing with …". After an app restart it still skips the blocked key.
+- [ ] Mid-task switch: start a multi-step task, block the first provider while it runs (e.g. disconnect it in a proxy). The step finishes on the next model, no tool runs twice, and nothing has to be retyped.
+- [ ] `budget = { session_usd = 0.01 }`: after the first reply, the next message is refused with the budget banner, and no request goes to any provider.
+- [ ] Only invalid keys in the profile: the "All models in this profile are unavailable" banner lists each one.
+- [ ] With no provider configured, no request goes to models.dev (check with a proxy); after adding one, the catalog loads (log: `model catalog loaded`).
+- [ ] Picking a model in the header pins it (the profile picker shows "Pinned model").

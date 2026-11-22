@@ -238,6 +238,22 @@ export const en = {
     shell: "command",
     agent: "agent",
   },
+  route: {
+    profile: "Fallback profile",
+    profileHint:
+      "A profile moves the chat to the next model when one hits a limit or fails. Picking a model pins it instead.",
+    pinned: "Pinned model",
+    switched: "{{ from }} unavailable ({{ reason }}) · continuing with {{ to }}.",
+    backAround: "Back around {{ time }}.",
+    reasonHeaders: "near its rate limit",
+    waiting: "Rate limited on {{ target }} · retrying in {{ seconds }} s.",
+    paused: "All models in this profile are unavailable: {{ list }}.",
+    resumeAt: "Resuming automatically at {{ time }} (Esc to stop).",
+    noResume: "Pick a model, or fix the credentials, to continue.",
+    budgetWarning: "{{ scope }} budget: {{ spent }} of {{ limit }} used.",
+    budgetStopped:
+      "{{ scope }} budget reached ({{ spent }} of {{ limit }}). The agent paused and nothing switched to another paid model. Raise the budget in the profile to continue.",
+  },
 };
 
 export type Dict = typeof en;

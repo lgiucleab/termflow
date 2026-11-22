@@ -138,6 +138,7 @@ struct H {
     chat: Chat,
     rx: broadcast::Receiver<AppEvent>,
     mock: MockProvider,
+    router: Router,
     project: PathBuf,
     workspace: String,
 }
@@ -193,13 +194,15 @@ async fn h(wire: WireFormat) -> H {
         rules: termflow_perms::default_rules(),
         ..ChatOptions::default()
     };
-    let chat = Chat::new(store.clone(), Arc::new(Router::new(store.clone(), secrets)), bus, opts);
+    let router = Router::new(store.clone(), secrets);
+    let chat = Chat::new(store.clone(), Arc::new(router.clone()), bus, opts);
     H {
         _d: d,
         store,
         chat,
         rx,
         mock,
+        router,
         project,
         workspace: ws.id,
     }
@@ -468,6 +471,82 @@ async fn midstream_error_discards_partial_and_reports() {
             .any(|e| matches!(e, AppEvent::AgentError { class, .. } if class == "overloaded"))
     );
     assert_eq!(h.chat.transcript(s.id).unwrap().len(), 1);
+}
+
+/// `BUILD_PROMPT` §12 M3 (c) + (f): an SSE error after a 200 and some tokens hands the step to
+/// the next model in the profile. The user types nothing, the step ends with exactly one
+/// committed assistant turn, and the tool that already ran is not run again.
+#[tokio::test(flavor = "multi_thread")]
+async fn midstream_failure_hands_off_to_the_next_model_without_rerunning_tools() {
+    let mut h = h(WireFormat::AnthropicMessages).await;
+    let backup = MockProvider::start().await.unwrap();
+    let cred = Credential {
+        id: "c2".into(),
+        kind: ProviderKind::Openai,
+        label: "backup".into(),
+        base_url: format!("{}/v1", backup.url()),
+        wire: WireFormat::OpenaiResponses,
+        has_secret: false,
+        created_at: jiff::Timestamp::now(),
+    };
+    h.store
+        .write(move |c| termflow_store::agent::insert_credential(c, &cred))
+        .await
+        .unwrap();
+    h.router.set_profiles(
+        [(
+            "main".to_owned(),
+            termflow_config::Profile {
+                chain: vec!["anthropic/m@t".into(), "openai/gpt-x@backup".into()],
+                ..Default::default()
+            },
+        )]
+        .into_iter()
+        .collect(),
+    );
+    h.mock
+        .push(anthropic_tool("call_1", "read", &json!({"path":"src/lib.rs"})));
+    h.mock.push(Script::sse(ERR)); // second step dies mid-stream
+    backup.push(responses_text("The bug is `a - b`."));
+    let s = h.session("m").await;
+    h.chat.set_profile(s.id, Some("main".into())).await.unwrap();
+    h.chat.send(s.id, "why does add fail?".into()).await.unwrap();
+    let events = h.run_to_idle(None).await;
+
+    assert!(
+        !events.iter().any(|e| matches!(e, AppEvent::AgentError { .. })),
+        "no error shown: {events:?}"
+    );
+    let turns = h.chat.transcript(s.id).unwrap();
+    let roles: Vec<Role> = turns.iter().map(|t| t.role).collect();
+    assert_eq!(roles, [Role::User, Role::Assistant, Role::Tool, Role::Assistant]);
+    assert!(turns.iter().all(|t| t.status == TurnStatus::Committed));
+    assert_eq!(final_text(&turns), "The bug is `a - b`.");
+    assert_eq!(
+        turns[3].served_by.as_ref().unwrap().credential_id.as_deref(),
+        Some("c2")
+    );
+    // The discarded partial turn stays in the database, out of the transcript.
+    let discarded: i64 = h
+        .store
+        .reader()
+        .unwrap()
+        .query_row("SELECT COUNT(*) FROM turns WHERE status = 'discarded'", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert_eq!(discarded, 1);
+    // (f) the read ran once; the backup got its result instead of re-running it.
+    let Part::ToolCall { call_id, .. } = turns[1].parts[0] else {
+        panic!()
+    };
+    assert_eq!(
+        termflow_store::agent::exec_count(&h.store.reader().unwrap(), call_id).unwrap(),
+        1
+    );
+    let body = backup.requests()[0].body.to_string();
+    assert!(body.contains("pub fn add"), "{body}");
+    assert_eq!((h.mock.requests().len(), backup.requests().len()), (2, 1));
 }
 
 #[tokio::test(flavor = "multi_thread")]

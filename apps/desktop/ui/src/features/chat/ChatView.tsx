@@ -49,6 +49,13 @@ const ERROR_CLASSES = [
   "unknown",
 ] as const;
 type ErrorCls = (typeof ERROR_CLASSES)[number];
+/** Dollars with cents; specta types f64 as nullable (NaN/∞). */
+const usd = (v: number | null): string => `$${(v ?? 0).toFixed(2)}`;
+
+/** Local wall-clock time for an RFC 3339 timestamp. */
+const clockTime = (iso: string): string =>
+  new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
 const errorLabel = (cls: string): string =>
   t(`errors.${(ERROR_CLASSES as readonly string[]).includes(cls) ? (cls as ErrorCls) : "unknown"}`);
 
@@ -227,6 +234,11 @@ export function ChatView(props: {
   const [running, setRunning] = createSignal<ReadonlySet<string>>(new Set());
   const [models, setModels] = createSignal<ModelInfo[]>([]);
   const [modelsError, setModelsError] = createSignal<string | null>(null);
+  const [profiles, setProfiles] = createSignal<string[]>([]);
+  void bridge
+    .listProfiles()
+    .then(setProfiles)
+    .catch(() => {});
   const [pickCred, setPickCred] = createSignal("");
   const [pickModel, setPickModel] = createSignal("");
   const [pickReasoning, setPickReasoning] = createSignal(true);
@@ -338,6 +350,50 @@ export function ChatView(props: {
         setLive(null);
         setError({ cls: e.class, message: e.message });
         break;
+      case "route_switched": {
+        const reason =
+          e.reason === "rate_limit_headers" ? t("route.reasonHeaders") : errorLabel(e.reason);
+        const base = t("route.switched", { from: e.from, to: e.to, reason });
+        note(e.until ? `${base} ${t("route.backAround", { time: clockTime(e.until) })}` : base);
+        break;
+      }
+      case "route_waiting":
+        note(t("route.waiting", { target: e.target, seconds: String(e.seconds) }));
+        break;
+      case "route_paused": {
+        const list = e.candidates
+          .map((c) =>
+            c.until
+              ? `${c.target} (${c.state}, ${clockTime(c.until)})`
+              : `${c.target} (${c.state})`,
+          )
+          .join(", ");
+        const tail = e.resume_at
+          ? t("route.resumeAt", { time: clockTime(e.resume_at) })
+          : t("route.noResume");
+        setError({ cls: "overloaded", message: `${t("route.paused", { list })} ${tail}` });
+        break;
+      }
+      case "budget_warning":
+        note(
+          t("route.budgetWarning", {
+            scope: e.scope,
+            spent: usd(e.spent_usd),
+            limit: usd(e.limit_usd),
+          }),
+        );
+        break;
+      case "budget_stopped":
+        setLive(null);
+        setError({
+          cls: "unknown",
+          message: t("route.budgetStopped", {
+            scope: e.scope,
+            spent: usd(e.spent_usd),
+            limit: usd(e.limit_usd),
+          }),
+        });
+        break;
     }
   });
   const offTools = onToolEvent((e) => {
@@ -440,6 +496,13 @@ export function ChatView(props: {
     setSession(await bridge.agentSession(s.id));
   };
 
+  const applyProfile = async (name: string) => {
+    const s = session();
+    if (!s) return;
+    await bridge.setAgentProfile(s.id, name || null);
+    setSession(await bridge.agentSession(s.id));
+  };
+
   const toggleMode = async () => {
     const s = session();
     if (!s) return;
@@ -465,7 +528,8 @@ export function ChatView(props: {
       case "attach":
         return props.onAttachLastBlock();
       case "init":
-        if (!s?.model) return setError({ cls: "unknown", message: t("agent.pickModelFirst") });
+        if (!s?.model && !s?.profile)
+          return setError({ cls: "unknown", message: t("agent.pickModelFirst") });
         markBusy(props.sessionId, true);
         return bridge.agentInit(props.sessionId).catch((e) => {
           markBusy(props.sessionId, false);
@@ -552,7 +616,7 @@ export function ChatView(props: {
   const sendToAgent = async (raw: string) => {
     const s = session();
     if (!s) return;
-    if (!s.model) {
+    if (!s.model && !s.profile) {
       setError({ cls: "unknown", message: t("agent.pickModelFirst") });
       return;
     }
@@ -659,7 +723,9 @@ export function ChatView(props: {
   const placeholder = () => {
     if (shellState() === "running") return t("shell.runningHint");
     if (mode() === "shell") return t("input.shellHint");
-    return session()?.model ? t("input.agentHint") : t("agent.pickModelFirst");
+    return session()?.model || session()?.profile
+      ? t("input.agentHint")
+      : t("agent.pickModelFirst");
   };
 
   const renderTurn = (turn: Turn) => (
@@ -749,6 +815,17 @@ export function ChatView(props: {
             </button>
           }
         >
+          <Show when={profiles().length > 0}>
+            <select
+              aria-label={t("route.profile")}
+              title={t("route.profileHint")}
+              value={session()?.profile ?? ""}
+              onChange={(e) => void applyProfile(e.currentTarget.value)}
+            >
+              <option value="">{t("route.pinned")}</option>
+              <For each={profiles()}>{(p) => <option value={p}>{p}</option>}</For>
+            </select>
+          </Show>
           <select
             aria-label={t("agent.credential")}
             value={pickCred()}
