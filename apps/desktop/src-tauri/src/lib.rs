@@ -6,9 +6,12 @@ use tauri::Manager;
 use tauri::ipc::{Channel, InvokeResponseBody, JavaScriptChannelId};
 use tauri_specta::{Builder, Event, collect_commands, collect_events};
 use termflow_config::Config;
-use termflow_core::{App, Paths};
+use termflow_core::{App, NewCredential, Paths};
 use termflow_terminal::OpenOptions;
-use termflow_types::{AgentCli, AppEvent, AppInfo, Block, BlockId, ShellSpec, TerminalId};
+use termflow_types::{
+    AgentCli, AgentSession, AppEvent, AppInfo, Block, BlockId, Credential, ModelInfo, ProviderKind, SessionId,
+    ShellSpec, TerminalId, Turn, WireFormat,
+};
 
 /// Path of the generated bridge, relative to this crate.
 pub const BINDINGS_PATH: &str = "../ui/src/bridge/generated/bindings.ts";
@@ -172,6 +175,121 @@ async fn setting_set(key: String, value_json: String, state: tauri::State<'_, St
     state.core.set_setting(key, value_json).await.map_err(err)
 }
 
+// ---- providers & agent chat ----
+
+#[tauri::command]
+#[specta::specta]
+fn credentials_list(state: tauri::State<'_, State>) -> Res<Vec<Credential>> {
+    state.core.credentials().map_err(err)
+}
+
+#[derive(Deserialize, specta::Type)]
+pub struct AddCredential {
+    kind: ProviderKind,
+    label: String,
+    base_url: Option<String>,
+    wire: Option<WireFormat>,
+    /// Sent once, stored in the OS keychain, never returned.
+    api_key: Option<String>,
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn credential_add(req: AddCredential, state: tauri::State<'_, State>) -> Res<Credential> {
+    state
+        .core
+        .add_credential(NewCredential {
+            kind: req.kind,
+            label: req.label,
+            base_url: req.base_url,
+            wire: req.wire,
+            api_key: req.api_key,
+        })
+        .await
+        .map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn credential_delete(id: String, state: tauri::State<'_, State>) -> Res<()> {
+    state.core.delete_credential(id).await.map_err(err)
+}
+
+/// Lists models; doubles as the connection test (errors come back classified).
+#[tauri::command]
+#[specta::specta]
+async fn models_list(credential_id: String, state: tauri::State<'_, State>) -> Res<Vec<ModelInfo>> {
+    state
+        .core
+        .chat()
+        .router()
+        .list_models(&credential_id)
+        .await
+        .map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+fn agent_sessions(state: tauri::State<'_, State>) -> Res<Vec<AgentSession>> {
+    state.core.chat().sessions().map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+fn agent_session(id: SessionId, state: tauri::State<'_, State>) -> Res<AgentSession> {
+    state.core.chat().session(id).map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn agent_session_create(
+    credential_id: Option<String>,
+    model: Option<String>,
+    state: tauri::State<'_, State>,
+) -> Res<AgentSession> {
+    state
+        .core
+        .chat()
+        .create_session(credential_id, model)
+        .await
+        .map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn agent_set_model(
+    id: SessionId,
+    credential_id: String,
+    model: String,
+    reasoning: bool,
+    state: tauri::State<'_, State>,
+) -> Res<()> {
+    state
+        .core
+        .chat()
+        .set_model(id, credential_id, model, reasoning)
+        .await
+        .map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+fn agent_transcript(id: SessionId, state: tauri::State<'_, State>) -> Res<Vec<Turn>> {
+    state.core.chat().transcript(id).map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn agent_send(id: SessionId, text: String, state: tauri::State<'_, State>) -> Res<()> {
+    state.core.chat().send(id, text).await.map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+fn agent_cancel(id: SessionId, state: tauri::State<'_, State>) {
+    state.core.chat().cancel(id);
+}
+
 /// Debug builds: the UI's frame-time monitor reports here so results land in the log.
 #[tauri::command]
 #[specta::specta]
@@ -196,8 +314,22 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             setting_get,
             setting_set,
             perf_report,
+            credentials_list,
+            credential_add,
+            credential_delete,
+            models_list,
+            agent_sessions,
+            agent_session,
+            agent_session_create,
+            agent_set_model,
+            agent_transcript,
+            agent_send,
+            agent_cancel,
         ])
         .events(collect_events![CoreEvent])
+        // IPC payloads are JSON-parsed in the webview, so 64-bit ints already arrive as JS numbers;
+        // typing them as `number` is accurate (needed for serde_json::Value in transcript parts).
+        .dangerously_cast_bigints_to_number()
 }
 
 pub fn export_bindings(builder: &Builder<tauri::Wry>) -> anyhow::Result<()> {
@@ -225,7 +357,7 @@ pub fn run() -> anyhow::Result<()> {
     let paths = Paths::os_default()?;
     let redactor = termflow_secrets::Redactor::new();
     let log_guard = termflow_core::logging::init(&paths.log_dir, redactor.clone());
-    let core = App::new(&paths, redactor)?;
+    let core = App::new(&paths, redactor, std::sync::Arc::new(termflow_secrets::KeychainStore))?;
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())

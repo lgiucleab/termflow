@@ -1,5 +1,6 @@
 //! SQLite persistence: migrations, a single writer thread and read connections.
 
+pub mod agent;
 pub mod blocks;
 pub mod settings;
 
@@ -14,6 +15,7 @@ static MIGRATIONS: LazyLock<Migrations<'static>> = LazyLock::new(|| {
     Migrations::new(vec![
         M::up(include_str!("../migrations/0001_init.sql")),
         M::up(include_str!("../migrations/0002_blocks_seq.sql")),
+        M::up(include_str!("../migrations/0003_credentials.sql")),
     ])
 });
 
@@ -27,6 +29,10 @@ pub enum StoreError {
     WriterGone,
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
+    #[error("json: {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("not found: {0}")]
+    NotFound(String),
 }
 
 type Job = Box<dyn FnOnce(&mut Connection) + Send>;
@@ -80,6 +86,21 @@ impl Store {
             }))
             .map_err(|_| StoreError::WriterGone)?;
         rx.await.map_err(|_| StoreError::WriterGone)?
+    }
+
+    /// Like [`Store::write`], for synchronous callers (startup). Don't call from async code.
+    pub fn write_blocking<T, F>(&self, f: F) -> Result<T, StoreError>
+    where
+        T: Send + 'static,
+        F: FnOnce(&mut Connection) -> Result<T, StoreError> + Send + 'static,
+    {
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.writer
+            .send(Box::new(move |c| {
+                let _ = tx.send(f(c));
+            }))
+            .map_err(|_| StoreError::WriterGone)?;
+        rx.recv().map_err(|_| StoreError::WriterGone)?
     }
 
     /// Open a read-only connection.

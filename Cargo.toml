@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "apps/cli", "apps/desktop/src-tauri"]
+members = ["crates/*", "apps/cli", "apps/desktop/src-tauri", "tests/mock-provider"]
 
 [workspace.package]
 version = "0.1.0"
@@ -21,6 +21,10 @@ termflow-core = { path = "crates/termflow-core" }
 termflow-pty = { path = "crates/termflow-pty" }
 termflow-shell-integ = { path = "crates/termflow-shell-integ" }
 termflow-terminal = { path = "crates/termflow-terminal" }
+termflow-providers = { path = "crates/termflow-providers" }
+termflow-router = { path = "crates/termflow-router" }
+termflow-agent = { path = "crates/termflow-agent" }
+mock-provider = { path = "tests/mock-provider" }
 
 # external
 anyhow = "1"
@@ -40,12 +44,20 @@ directories = "6"
 ulid = { version = "1", features = ["serde"] }
 jiff = { version = "1", features = ["serde"] }
 regex = "1"
-specta = { version = "=2.0.0-rc.28", features = ["derive"] }
+specta = { version = "=2.0.0-rc.28", features = ["derive", "serde_json"] }
 tempfile = "3"
 vte = "0.15"
 base64 = "0.23"
 portable-pty = "0.9"
 proptest = "1"
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "stream", "json", "http2", "charset", "system-proxy"] }
+eventsource-stream = "0.2"
+async-trait = "0.1"
+futures = "0.3"
+keyring = "4.2"
+axum = "0.8"
+insta = { version = "1", features = ["json"] }
+tokio-stream = "0.1"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

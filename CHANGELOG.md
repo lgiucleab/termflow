@@ -4,6 +4,14 @@ All notable changes to this project. Format: Keep a Changelog; versions follow S
 
 ## [Unreleased]
 
+### Added (M2a — Models and chat)
+- Provider connections: Anthropic, OpenAI, OpenRouter, Ollama, or any custom endpoint (OpenAI Chat / Responses / Anthropic format). API keys live only in the OS keychain.
+- Canonical transcript (append-only, provider-native reasoning kept verbatim) with crash recovery to the last finished turn.
+- Four streaming adapters with error classification (rate limit vs quota vs overload vs context overflow vs auth…) and model listing.
+- Router pass-through with a per-request attempt log (tokens, cache, TTFT, served model, error class).
+- Agent tab: streaming chat with model picker, reasoning toggle, safe Markdown, Stop/Esc, and attached terminal blocks as context.
+- Mock provider (tests and dev server) and fixtures for all four wire formats.
+
 ### Added (M1 — Terminal)
 - PTY sessions (`portable-pty`, ConPTY on Windows) with shell detection (zsh, bash, fish, nu; pwsh, Windows PowerShell, cmd, Git Bash, WSL distros) and agent-CLI discovery on PATH.
 - Shell integration for zsh, bash (3.2+), fish and PowerShell, injected without touching rc files; OSC 133 / 6973 / 7 parsed into blocks (command, exit code, duration, cwd, branch), stored in SQLite with a 2 MB plain-text output excerpt.

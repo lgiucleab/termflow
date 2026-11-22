@@ -1,6 +1,6 @@
 [package]
 name = "termflow-router"
-description = "Model router: classification, health, budgets, fallback chains."
+description = "Model router: classification glue, health, budgets, fallback chains (M2: pass-through)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,3 +12,19 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+termflow-types.workspace = true
+termflow-providers.workspace = true
+termflow-store.workspace = true
+termflow-secrets.workspace = true
+futures.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tokio-util.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+mock-provider.workspace = true
+tempfile.workspace = true
+jiff.workspace = true

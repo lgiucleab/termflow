@@ -1,60 +1,118 @@
-//! OS keychain wrapper, `secret://` resolution and redaction registry.
-//!
-//! M0 ships the redaction registry only; the keychain wrapper lands in M2.
+//! Secrets: the OS keychain (macOS Keychain, Windows Credential Manager, Secret Service) is the
+//! only place they live. Config and the database refer to them as `secret://<id>`.
 
-use std::sync::{Arc, LazyLock, RwLock};
+mod redact;
 
-use regex::Regex;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
-const MASK: &str = "[REDACTED]";
+pub use redact::Redactor;
 
-#[allow(clippy::expect_used)] // literal patterns, checked by tests
-static PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
-    [
-        r"sk-[A-Za-z0-9_\-]{8,}",                                   // OpenAI / Anthropic style keys
-        r"gh[pousr]_[A-Za-z0-9]{20,}",                              // GitHub tokens
-        r"(?:AKIA|ASIA)[0-9A-Z]{16}",                               // AWS access key ids
-        r"eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+", // JWTs
-    ]
-    .iter()
-    .map(|p| Regex::new(p).expect("valid redaction regex"))
-    .collect()
-});
+/// Keychain service name for every `TermFlow` secret.
+pub const SERVICE: &str = "com.flowlabs.termflow";
 
-/// Shared set of known secret values plus built-in token patterns.
-#[derive(Debug, Clone, Default)]
-pub struct Redactor {
-    known: Arc<RwLock<Vec<String>>>,
+#[derive(Debug, thiserror::Error)]
+pub enum SecretError {
+    #[error("keychain unavailable or refused access: {0}")]
+    Store(String),
 }
 
-impl Redactor {
-    pub fn new() -> Self {
-        Self::default()
+/// Where secrets are kept. Production uses [`KeychainStore`]; tests use [`MemoryStore`].
+pub trait SecretStore: Send + Sync {
+    fn set(&self, id: &str, secret: &str) -> Result<(), SecretError>;
+    fn get(&self, id: &str) -> Result<Option<String>, SecretError>;
+    fn delete(&self, id: &str) -> Result<(), SecretError>;
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct KeychainStore;
+
+fn store_err(e: impl std::fmt::Display) -> SecretError {
+    SecretError::Store(e.to_string())
+}
+
+impl SecretStore for KeychainStore {
+    fn set(&self, id: &str, secret: &str) -> Result<(), SecretError> {
+        keyring::Entry::new(SERVICE, id)
+            .and_then(|e| e.set_password(secret))
+            .map_err(store_err)
     }
 
-    /// Register a concrete secret value (e.g. a key just read from the keychain).
-    pub fn register(&self, secret: impl Into<String>) {
-        let secret = secret.into();
-        if secret.len() < 4 {
-            return; // masking tiny strings would mangle ordinary text
-        }
-        if let Ok(mut known) = self.known.write() {
-            known.push(secret);
+    fn get(&self, id: &str) -> Result<Option<String>, SecretError> {
+        match keyring::Entry::new(SERVICE, id).and_then(|e| e.get_password()) {
+            Ok(s) => Ok(Some(s)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(e) => Err(store_err(e)),
         }
     }
 
-    /// Mask known secrets and common token patterns in `text`.
-    pub fn redact(&self, text: &str) -> String {
-        let mut out = text.to_owned();
-        if let Ok(known) = self.known.read() {
-            for s in known.iter() {
-                out = out.replace(s.as_str(), MASK);
-            }
+    fn delete(&self, id: &str) -> Result<(), SecretError> {
+        match keyring::Entry::new(SERVICE, id).and_then(|e| e.delete_credential()) {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(e) => Err(store_err(e)),
         }
-        for re in PATTERNS.iter() {
-            out = re.replace_all(&out, MASK).into_owned();
+    }
+}
+
+/// In-memory store for tests (never touches the real keychain).
+#[derive(Debug, Default, Clone)]
+pub struct MemoryStore(Arc<Mutex<HashMap<String, String>>>);
+
+impl MemoryStore {
+    fn map(&self) -> std::sync::MutexGuard<'_, HashMap<String, String>> {
+        self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+impl SecretStore for MemoryStore {
+    fn set(&self, id: &str, secret: &str) -> Result<(), SecretError> {
+        self.map().insert(id.into(), secret.into());
+        Ok(())
+    }
+    fn get(&self, id: &str) -> Result<Option<String>, SecretError> {
+        Ok(self.map().get(id).cloned())
+    }
+    fn delete(&self, id: &str) -> Result<(), SecretError> {
+        self.map().remove(id);
+        Ok(())
+    }
+}
+
+/// Resolves `secret://<id>` references and registers every value it hands out with the redactor.
+#[derive(Clone)]
+pub struct Secrets {
+    store: Arc<dyn SecretStore>,
+    redactor: Redactor,
+}
+
+impl Secrets {
+    pub fn new(store: Arc<dyn SecretStore>, redactor: Redactor) -> Self {
+        Self { store, redactor }
+    }
+
+    pub fn set(&self, id: &str, secret: &str) -> Result<(), SecretError> {
+        self.redactor.register(secret);
+        self.store.set(id, secret)
+    }
+
+    pub fn get(&self, id: &str) -> Result<Option<String>, SecretError> {
+        let v = self.store.get(id)?;
+        if let Some(s) = &v {
+            self.redactor.register(s.clone());
         }
-        out
+        Ok(v)
+    }
+
+    pub fn delete(&self, id: &str) -> Result<(), SecretError> {
+        self.store.delete(id)
+    }
+
+    /// `secret://<id>` → the secret; anything else is not a reference.
+    pub fn resolve(&self, reference: &str) -> Result<Option<String>, SecretError> {
+        match reference.strip_prefix("secret://") {
+            Some(id) => self.get(id),
+            None => Ok(None),
+        }
     }
 }
 
@@ -63,18 +121,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn masks_patterns_and_known_values() {
+    fn resolve_registers_for_redaction() {
         let r = Redactor::new();
-        r.register("hunter2-secret");
-        let s = r.redact(
-            "key=sk-ant-abcdefghijk gh=ghp_abcdefghijklmnopqrstuv aws=AKIAABCDEFGHIJKLMNOP \
-             jwt=eyJhbGc.eyJzdWIi.sig_1 pw=hunter2-secret ok=plain",
+        let s = Secrets::new(Arc::new(MemoryStore::default()), r.clone());
+        s.store.set("k1", "my-very-secret-value").unwrap();
+        assert_eq!(
+            s.resolve("secret://k1").unwrap().as_deref(),
+            Some("my-very-secret-value")
         );
-        assert!(!s.contains("sk-ant"));
-        assert!(!s.contains("ghp_"));
-        assert!(!s.contains("AKIA"));
-        assert!(!s.contains("eyJ"));
-        assert!(!s.contains("hunter2"));
-        assert!(s.contains("ok=plain"));
+        assert_eq!(s.resolve("plain").unwrap(), None);
+        assert_eq!(r.redact("x my-very-secret-value y"), "x [REDACTED] y");
+        s.delete("k1").unwrap();
+        assert_eq!(s.get("k1").unwrap(), None);
     }
 }

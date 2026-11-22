@@ -24,6 +24,18 @@ export const commands = {
 	settingSet: (key: string, valueJson: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("setting_set", { key, valueJson }, options),
 	/**  Debug builds: the UI's frame-time monitor reports here so results land in the log. */
 	perfReport: (report: string, options?: InvokeOptions) => __TAURI_INVOKE<void>("perf_report", { report }, options),
+	credentialsList: (options?: InvokeOptions) => __TAURI_INVOKE<Credential[]>("credentials_list", undefined, options),
+	credentialAdd: (req: AddCredential_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<Credential>("credential_add", { req }, options),
+	credentialDelete: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("credential_delete", { id }, options),
+	/**  Lists models; doubles as the connection test (errors come back classified). */
+	modelsList: (credentialId: string, options?: InvokeOptions) => __TAURI_INVOKE<ModelInfo_Serialize[]>("models_list", { credentialId }, options),
+	agentSessions: (options?: InvokeOptions) => __TAURI_INVOKE<AgentSession_Serialize[]>("agent_sessions", undefined, options),
+	agentSession: (id: SessionId, options?: InvokeOptions) => __TAURI_INVOKE<AgentSession_Serialize>("agent_session", { id }, options),
+	agentSessionCreate: (credentialId: string | null, model: string | null, options?: InvokeOptions) => __TAURI_INVOKE<AgentSession_Serialize>("agent_session_create", { credentialId, model }, options),
+	agentSetModel: (id: SessionId, credentialId: string, model: string, reasoning: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("agent_set_model", { id, credentialId, model, reasoning }, options),
+	agentTranscript: (id: SessionId, options?: InvokeOptions) => __TAURI_INVOKE<Turn_Serialize[]>("agent_transcript", { id }, options),
+	agentSend: (id: SessionId, text: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("agent_send", { id, text }, options),
+	agentCancel: (id: SessionId, options?: InvokeOptions) => __TAURI_INVOKE<void>("agent_cancel", { id }, options),
 };
 
 /** Events */
@@ -32,11 +44,54 @@ export const events = {
 };
 
 /* Types */
+export type AddCredential = AddCredential_Serialize | AddCredential_Deserialize;
+
+export type AddCredential_Deserialize = {
+	kind: ProviderKind,
+	label: string,
+	base_url?: string | null,
+	wire?: WireFormat | null,
+	/**  Sent once, stored in the OS keychain, never returned. */
+	api_key?: string | null,
+};
+
+export type AddCredential_Serialize = {
+	kind: ProviderKind,
+	label: string,
+	base_url: string | null,
+	wire: WireFormat | null,
+	/**  Sent once, stored in the OS keychain, never returned. */
+	api_key: string | null,
+};
+
 /**  An agent CLI found on PATH (Claude Code, Codex, ...). Names are plain text, no logos. */
 export type AgentCli = {
 	id: string,
 	name: string,
 	program: string,
+};
+
+/**  An agent chat session as listed in the UI. */
+export type AgentSession = AgentSession_Serialize | AgentSession_Deserialize;
+
+/**  An agent chat session as listed in the UI. */
+export type AgentSession_Deserialize = {
+	id: SessionId,
+	title?: string | null,
+	credential_id?: string | null,
+	model?: string | null,
+	reasoning: boolean,
+	updated_at: string,
+};
+
+/**  An agent chat session as listed in the UI. */
+export type AgentSession_Serialize = {
+	id: SessionId,
+	title: string | null,
+	credential_id: string | null,
+	model: string | null,
+	reasoning: boolean,
+	updated_at: string,
 };
 
 /**  Events published on the core event bus; the UI subscribes to them. */
@@ -51,7 +106,15 @@ export type AppEvent_Deserialize =
 /**  Shell marks arrived out of order or broken; blocks are off for this terminal. */
 { type: "blocks_degraded"; terminal_id: TerminalId; reason: string } | 
 /**  The terminal's process exited. */
-{ type: "terminal_exited"; terminal_id: TerminalId; exit_code?: number | null };
+{ type: "terminal_exited"; terminal_id: TerminalId; exit_code?: number | null } | 
+/**  An assistant turn started streaming. */
+{ type: "agent_turn_started"; session_id: SessionId; turn_id: TurnId; model: string } | 
+/**  Streamed text or readable reasoning for the turn in progress. */
+{ type: "agent_delta"; session_id: SessionId; turn_id: TurnId; text: string; reasoning: boolean } | 
+/**  A turn was committed to the transcript (persisted before this event is sent). */
+{ type: "agent_turn_committed"; turn: Turn_Deserialize } | 
+/**  The request failed; the partial turn was discarded. */
+{ type: "agent_error"; session_id: SessionId; turn_id?: TurnId | null; class: string; message: string };
 
 /**  Events published on the core event bus; the UI subscribes to them. */
 export type AppEvent_Serialize = 
@@ -62,13 +125,23 @@ export type AppEvent_Serialize =
 /**  Shell marks arrived out of order or broken; blocks are off for this terminal. */
 { type: "blocks_degraded"; terminal_id: TerminalId; reason: string } | 
 /**  The terminal's process exited. */
-{ type: "terminal_exited"; terminal_id: TerminalId; exit_code: number | null };
+{ type: "terminal_exited"; terminal_id: TerminalId; exit_code: number | null } | 
+/**  An assistant turn started streaming. */
+{ type: "agent_turn_started"; session_id: SessionId; turn_id: TurnId; model: string } | 
+/**  Streamed text or readable reasoning for the turn in progress. */
+{ type: "agent_delta"; session_id: SessionId; turn_id: TurnId; text: string; reasoning: boolean } | 
+/**  A turn was committed to the transcript (persisted before this event is sent). */
+{ type: "agent_turn_committed"; turn: Turn_Serialize } | 
+/**  The request failed; the partial turn was discarded. */
+{ type: "agent_error"; session_id: SessionId; turn_id: TurnId | null; class: string; message: string };
 
 /**  Basic information about the running app, shown in the UI. */
 export type AppInfo = {
 	name: string,
 	version: string,
 };
+
+export type AttemptId = string;
 
 /**  One command run in a terminal, as delimited by shell integration marks. */
 export type Block = Block_Serialize | Block_Deserialize;
@@ -119,6 +192,8 @@ export type Block_Serialize = {
 	finished_at: string | null,
 };
 
+export type CallId = string;
+
 export type Config = Config_Serialize | Config_Deserialize;
 
 export type Config_Deserialize = {
@@ -141,6 +216,34 @@ export type CoreEvent_Deserialize = AppEvent_Deserialize;
 
 /**  Every core bus event, forwarded to the webview. */
 export type CoreEvent_Serialize = AppEvent_Serialize;
+
+/**  A configured provider connection. The API key itself lives only in the OS keychain. */
+export type Credential = {
+	id: string,
+	kind: ProviderKind,
+	label: string,
+	base_url: string,
+	wire: WireFormat,
+	has_secret: boolean,
+	created_at: string,
+};
+
+/**  A model offered by a provider's models endpoint. */
+export type ModelInfo = ModelInfo_Serialize | ModelInfo_Deserialize;
+
+/**  A model offered by a provider's models endpoint. */
+export type ModelInfo_Deserialize = {
+	id: string,
+	display_name?: string | null,
+	context_window?: number | null,
+};
+
+/**  A model offered by a provider's models endpoint. */
+export type ModelInfo_Serialize = {
+	id: string,
+	display_name: string | null,
+	context_window: number | null,
+};
 
 export type OpenTerminal = OpenTerminal_Serialize | OpenTerminal_Deserialize;
 
@@ -167,6 +270,48 @@ export type OpenTerminal_Serialize = {
 	/**  `Channel.toJSON()` of a channel receiving raw output bytes (`ArrayBuffer`). */
 	on_output: string,
 };
+
+export type Part = Part_Serialize | Part_Deserialize;
+
+export type Part_Deserialize = { type: "text"; text: string } | { type: "tool_call"; call_id: CallId; name: string; args: Value } | { type: "tool_result"; call_id: CallId; content: ToolResultContent[]; is_error: boolean } | 
+/**
+ *  Provider-native reasoning, stored exactly as returned. Re-sent only to the same family
+ *  and credential scope; dropped (optionally as summary text) for anyone else.
+ */
+{ type: "reasoning"; family: string; model: string; credential_scope: string; native: Value; summary_text?: string | null };
+
+export type Part_Serialize = { type: "text"; text: string } | { type: "tool_call"; call_id: CallId; name: string; args: Value } | { type: "tool_result"; call_id: CallId; content: ToolResultContent[]; is_error: boolean } | 
+/**
+ *  Provider-native reasoning, stored exactly as returned. Re-sent only to the same family
+ *  and credential scope; dropped (optionally as summary text) for anyone else.
+ */
+{ type: "reasoning"; family: string; model: string; credential_scope: string; native: Value; summary_text: string | null };
+
+/**  Provider presets offered in settings; `Custom` takes any base URL and wire format. */
+export type ProviderKind = "anthropic" | "openai" | "openrouter" | "ollama" | "custom";
+
+export type Role = "system" | "user" | "assistant" | "tool";
+
+/**  Which model actually produced an assistant turn. */
+export type ServedBy = ServedBy_Serialize | ServedBy_Deserialize;
+
+/**  Which model actually produced an assistant turn. */
+export type ServedBy_Deserialize = {
+	provider: string,
+	model: string,
+	credential_id?: string | null,
+	attempt_id: AttemptId,
+};
+
+/**  Which model actually produced an assistant turn. */
+export type ServedBy_Serialize = {
+	provider: string,
+	model: string,
+	credential_id: string | null,
+	attempt_id: AttemptId,
+};
+
+export type SessionId = string;
 
 /**  Which family a shell belongs to; decides how shell integration is injected. */
 export type ShellKind = "zsh" | "bash" | "fish" | "nu" | "pwsh" | "power_shell" | "cmd" | "wsl" | "other";
@@ -217,6 +362,36 @@ export type TerminalConfig_Serialize = {
 
 export type TerminalId = string;
 
+export type ToolResultContent = { type: "text"; text: string };
+
+export type Turn = Turn_Serialize | Turn_Deserialize;
+
+export type TurnId = string;
+
+export type TurnStatus = "committed" | 
+/**  Being streamed. Never sent to a model; becomes `Discarded` if the app dies mid-stream. */
+"partial" | "discarded" | "reverted" | "compacted";
+
+export type Turn_Deserialize = {
+	id: TurnId,
+	session_id: SessionId,
+	role: Role,
+	parts: Part_Deserialize[],
+	created_at: string,
+	status: TurnStatus,
+	served_by?: ServedBy_Deserialize | null,
+};
+
+export type Turn_Serialize = {
+	id: TurnId,
+	session_id: SessionId,
+	role: Role,
+	parts: Part_Serialize[],
+	created_at: string,
+	status: TurnStatus,
+	served_by: ServedBy_Serialize | null,
+};
+
 export type UiConfig = UiConfig_Serialize | UiConfig_Deserialize;
 
 export type UiConfig_Deserialize = {
@@ -244,6 +419,11 @@ export type UpdatesConfig_Serialize = {
 	/**  Check for updates on startup (the only request made without a configured provider). */
 	check: boolean,
 };
+
+export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };
+
+/**  Request/response format a provider speaks. */
+export type WireFormat = "anthropic_messages" | "openai_responses" | "openai_chat" | "ollama";
 
 /* Tauri Specta runtime */
 type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;

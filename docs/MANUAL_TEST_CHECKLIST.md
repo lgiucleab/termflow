@@ -22,3 +22,16 @@ Run on **macOS** and **Windows (PowerShell 7 and Git Bash)**.
 - [ ] Clicking an http(s) link opens the default browser.
 - [ ] Quit and reopen: tabs and splits come back (as plain shells).
 - [ ] Spanish UI (system language es-*): all chrome strings are translated.
+
+## M2a: Models and chat
+
+For a no-key smoke test, run `cargo run -p mock-provider -- tests/fixtures/http/ollama/text_tool.ndjson`, add a provider **Ollama** with that URL as base URL, use model `local-test-model`, and send a message.
+
+- [ ] Providers → add **Anthropic** with your API key. "Test" shows the model count, and the key field is empty again after adding.
+- [ ] Repeat for **OpenAI**, **OpenRouter** and **Ollama** (install Ollama and run `ollama pull <a coder model>` first).
+- [ ] An Agent tab (palette → New agent session): pick provider + model → Use → send a message. Text streams; reasoning shows collapsed; "served by" names the model.
+- [ ] Send a second message in the same session: no error. This proves that thinking/reasoning blocks are replayed correctly to Anthropic and OpenAI.
+- [ ] Esc during a long answer keeps the partial text with "[cancelled]".
+- [ ] Quit the app mid-answer, then reopen: the session shows up to the last finished answer and continues normally.
+- [ ] A wrong API key shows "The API key was rejected." A non-reasoning model with Reasoning on shows the provider's error; turning Reasoning off fixes it.
+- [ ] macOS Keychain Access shows items under `com.flowlabs.termflow`; removing a provider in the app removes its item.
