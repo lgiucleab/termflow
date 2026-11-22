@@ -7,14 +7,20 @@ export interface Theme {
   name: string;
   light: boolean;
   ui: {
+    /** Window layer behind the raised panels. */
+    deep: string;
+    /** Panel background (timeline, sidebar cards, dialogs). */
     bg: string;
     surface: string;
     surface2: string;
     border: string;
     text: string;
     muted: string;
+    /** Decorative text (meta, placeholders); not held to AA. */
+    faint: string;
     accent: string;
     success: string;
+    warning: string;
     danger: string;
   };
   terminal: ITheme;
@@ -46,18 +52,22 @@ export const THEMES: Theme[] = [
     name: "Mono Dark",
     light: false,
     ui: {
-      bg: "#000000",
-      surface: "#0a0a0a",
-      surface2: "#141414",
-      border: "#1f1f1f",
+      // Grey ramp from OpenCode's GUI (MIT); accent stays white.
+      deep: "#080808",
+      bg: "#161616",
+      surface: "#242424",
+      surface2: "#2e2e2e",
+      border: "#ffffff1a",
       text: "#fafafa",
-      muted: "#8a8a8a",
+      muted: "#aeaeae",
+      faint: "#808080",
       accent: "#fafafa",
-      success: "#3fb950",
-      danger: "#f85149",
+      success: "#6bd586",
+      warning: "#f2cf76",
+      danger: "#f17471",
     },
     terminal: {
-      background: "#000000",
+      background: "#161616",
       foreground: "#e6e6e6",
       cursor: "#fafafa",
       cursorAccent: "#000000",
@@ -88,15 +98,18 @@ export const THEMES: Theme[] = [
     name: "Mono Light",
     light: true,
     ui: {
+      deep: "#f2f2f2",
       bg: "#ffffff",
       surface: "#fafafa",
-      surface2: "#f0f0f0",
-      border: "#e5e5e5",
-      text: "#0a0a0a",
-      muted: "#6b6b6b",
-      accent: "#0a0a0a",
-      success: "#1a7f37",
-      danger: "#cf222e",
+      surface2: "#eeeeee",
+      border: "#0000001a",
+      text: "#161616",
+      muted: "#5c5c5c",
+      faint: "#808080",
+      accent: "#161616",
+      success: "#198b43",
+      warning: "#9a6700",
+      danger: "#b82d35",
     },
     terminal: {
       background: "#ffffff",
@@ -129,14 +142,17 @@ export const THEMES: Theme[] = [
     name: "Dark",
     light: false,
     ui: {
+      deep: "#090b0e",
       bg: "#0e1014",
       surface: "#161920",
       surface2: "#1d212a",
       border: "#262a33",
       text: "#e6e8ec",
       muted: "#8b919c",
+      faint: "#5c6370",
       accent: "#6ea8ff",
       success: "#4cc38a",
+      warning: "#e5c07b",
       danger: "#f06a6a",
     },
     terminal: {
@@ -169,14 +185,17 @@ export const THEMES: Theme[] = [
     name: "Light",
     light: true,
     ui: {
+      deep: "#eceef2",
       bg: "#f7f8fa",
       surface: "#ffffff",
       surface2: "#eef0f3",
       border: "#dde1e7",
       text: "#15181d",
       muted: "#5b6270",
+      faint: "#8b919c",
       accent: "#2563eb",
       success: "#15803d",
+      warning: "#9a6700",
       danger: "#c02626",
     },
     terminal: {
@@ -209,14 +228,17 @@ export const THEMES: Theme[] = [
     name: "High Contrast",
     light: false,
     ui: {
+      deep: "#000000",
       bg: "#000000",
       surface: "#0a0a0a",
       surface2: "#141414",
       border: "#ffffff",
       text: "#ffffff",
       muted: "#d0d0d0",
+      faint: "#bdbdbd",
       accent: "#ffd400",
       success: "#00ff7f",
+      warning: "#ffd400",
       danger: "#ff5050",
     },
     terminal: {
@@ -249,14 +271,17 @@ export const THEMES: Theme[] = [
     name: "Nord",
     light: false,
     ui: {
+      deep: "#272c36",
       bg: "#2e3440",
       surface: "#3b4252",
       surface2: "#434c5e",
       border: "#4c566a",
       text: "#eceff4",
       muted: "#a3acbd",
+      faint: "#7b8394",
       accent: "#88c0d0",
       success: "#a3be8c",
+      warning: "#ebcb8b",
       danger: "#bf616a",
     },
     terminal: {
@@ -289,14 +314,17 @@ export const THEMES: Theme[] = [
     name: "Gruvbox Dark",
     light: false,
     ui: {
+      deep: "#1d2021",
       bg: "#282828",
       surface: "#32302f",
       surface2: "#3c3836",
       border: "#504945",
       text: "#ebdbb2",
       muted: "#a89984",
+      faint: "#7c6f64",
       accent: "#fabd2f",
       success: "#b8bb26",
+      warning: "#fabd2f",
       danger: "#fb4934",
     },
     terminal: {
@@ -329,14 +357,17 @@ export const THEMES: Theme[] = [
     name: "Catppuccin Mocha",
     light: false,
     ui: {
+      deep: "#11111b",
       bg: "#1e1e2e",
       surface: "#181825",
       surface2: "#313244",
       border: "#45475a",
       text: "#cdd6f4",
       muted: "#a6adc8",
+      faint: "#7f849c",
       accent: "#89b4fa",
       success: "#a6e3a1",
+      warning: "#f9e2af",
       danger: "#f38ba8",
     },
     terminal: {

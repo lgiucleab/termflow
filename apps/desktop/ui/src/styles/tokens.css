@@ -1,21 +1,51 @@
 @import "tailwindcss";
 
-/* Design tokens. Themes override these variables only. */
+/* Design tokens (M2d). Layering follows OpenCode's GUI (MIT): a window `deep` layer, raised
+   panels on `bg`, and `surface`/`surface2` layers inside them. Themes override the colour
+   variables only (themes.ts); everything else derives from them. */
 :root {
-  --tf-bg: #000000;
-  --tf-surface: #0a0a0a;
-  --tf-surface2: #141414;
-  --tf-border: #1f1f1f;
+  /* colour — overridden per theme */
+  --tf-deep: #080808;
+  --tf-bg: #161616;
+  --tf-surface: #242424;
+  --tf-surface2: #2e2e2e;
+  --tf-border: #ffffff1a;
   --tf-text: #fafafa;
-  --tf-text-muted: #8a8a8a;
+  --tf-text-muted: #aeaeae;
+  --tf-faint: #808080;
   --tf-accent: #fafafa;
-  --tf-success: #3fb950;
-  --tf-danger: #f85149;
+  --tf-success: #6bd586;
+  --tf-warning: #f2cf76;
+  --tf-danger: #f17471;
+
+  /* derived */
+  --tf-hover: color-mix(in srgb, var(--tf-text) 6%, transparent);
+  --tf-pressed: color-mix(in srgb, var(--tf-text) 10%, transparent);
+  --tf-border-strong: color-mix(in srgb, var(--tf-text) 20%, transparent);
+  --tf-add-bg: color-mix(in srgb, var(--tf-success) 14%, transparent);
+  --tf-del-bg: color-mix(in srgb, var(--tf-danger) 14%, transparent);
+  --tf-shadow-raised: 0 2px 4px rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.3),
+    0 0 0 0.5px var(--tf-border-strong);
+  --tf-shadow-floating: 0 8px 16px rgb(0 0 0 / 0.3), 0 2px 6px rgb(0 0 0 / 0.25),
+    0 0 0 0.5px var(--tf-border-strong);
+  --tf-shadow-overlay: 0 16px 32px rgb(0 0 0 / 0.4), 0 4px 10px rgb(0 0 0 / 0.3),
+    0 0 0 0.5px var(--tf-border-strong);
+
+  /* shape, type, motion */
   --tf-radius: 6px;
+  --tf-radius-sm: 4px;
+  --tf-radius-panel: 10px;
+  --tf-radius-card: 12px;
   --tf-space: 8px;
-  --tf-font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
-  --tf-font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --tf-font-ui: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --tf-font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --tf-text-sm: 12px;
+  --tf-text-base: 13px;
+  --tf-text-meta: 11px;
+  --tf-weight-medium: 530;
+  --tf-ease: cubic-bezier(0.2, 0, 0, 1);
   --tf-motion: 150ms;
+  --tf-session-width: 744px;
   color-scheme: dark;
 }
 
@@ -43,11 +73,23 @@ body,
   margin: 0;
 }
 body {
-  background: var(--tf-bg);
+  background: var(--tf-deep);
   color: var(--tf-text);
   font-family: var(--tf-font-ui);
+  font-size: var(--tf-text-base);
+  line-height: 20px;
+  letter-spacing: -0.04px;
+  font-weight: 440;
+  -webkit-font-smoothing: antialiased;
 }
 :focus-visible {
   outline: 2px solid var(--tf-accent);
   outline-offset: 2px;
+}
+::selection {
+  background: var(--tf-pressed);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--tf-surface2) transparent;
 }
