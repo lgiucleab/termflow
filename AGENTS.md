@@ -38,7 +38,8 @@ Untestable-here behaviour goes in `docs/MANUAL_TEST_CHECKLIST.md`.
 - Debug build: `pnpm -C apps/desktop tauri build --debug`
 - Regenerate TS bridge: `cargo test -p termflow-desktop export_bindings` (also runs on every debug launch)
 - Regenerate config schema: `cargo run -p termflow-config --bin gen-schema`
-- Mock provider: arrives in M3 (`tests/mock-provider`).
+- Mock provider dev server: `cargo run -p mock-provider -- tests/fixtures/http/<wire>/<file>`
+- Refresh render snapshots: `INSTA_UPDATE=always cargo test -p termflow-providers` (review the diff)
 - Dev harness: `TERMFLOW_DEV_AUTORUN='yes | head -n 2000000'` types a command into each new terminal (debug builds); frame times land in the log under `perf`.
 
 ## Where things live
@@ -50,13 +51,17 @@ Untestable-here behaviour goes in `docs/MANUAL_TEST_CHECKLIST.md`.
 - `crates/termflow-pty` — PTY spawn/IO, shell + CLI discovery
 - `crates/termflow-shell-integ` — OSC scanner, block tracker, injection; scripts in `shell-integration/`
 - `crates/termflow-terminal` — terminal sessions, batching, back-pressure, block persistence
-- `crates/termflow-{providers,router,catalog}` — models and fallback (M2/M3)
-- `crates/termflow-{agent,tools,perms,context,snapshots}` — agent (M2/M4)
+- `crates/termflow-providers` — adapters (anthropic, openai_responses, openai_chat, ollama), SSE/NDJSON, error classifier
+- `crates/termflow-router` — every model call; M2 pass-through + attempt log; fallback in M3
+- `crates/termflow-catalog` — model catalog (M3)
+- `tests/mock-provider` + `tests/fixtures/http` — scriptable fake provider; fixtures written from docs
+- `crates/termflow-agent` — chat sessions over the transcript (M2a); tools/loop in M2b
+- `crates/termflow-{tools,perms,context,snapshots}` — agent tools (M2b/M4)
 - `crates/termflow-{mcp,acp,sandbox,worktrees,daemon}`, `apps/cli` — v1 stubs
 - `apps/desktop/src-tauri` — Tauri glue only
 - `apps/desktop/ui/src/bridge` — the only code that calls Tauri; `generated/` is tauri-specta output
 - `apps/desktop/ui/src/features/terminal` — xterm controller (outlives components), block headers; `layout/` pure tab/split model
 
 ## Status
-Current milestone: **M1 — Terminal** (`docs/specs/M1.md`). M0 done.
+Current milestone: **M2a — Models and chat** (`docs/specs/M2.md`). M0 and M1 done (M1 PR #1).
 Known issues: see the spec's "Known issues" section.
