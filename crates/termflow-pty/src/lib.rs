@@ -92,7 +92,12 @@ pub fn spawn(req: &SpawnRequest) -> Result<(Pty, mpsc::Receiver<Vec<u8>>), PtyEr
             let mut buf = vec![0u8; READ_BUF];
             loop {
                 match reader.read(&mut buf) {
-                    Ok(0) | Err(_) => break, // EOF, or EIO on Linux/macOS when the child exits
+                    Ok(0) => break,
+                    Err(e) => {
+                        // EIO on Linux/macOS and BrokenPipe on Windows are the normal end of a child.
+                        tracing::debug!(error = %e, "pty read ended");
+                        break;
+                    }
                     Ok(n) => {
                         if tx.blocking_send(buf[..n].to_vec()).is_err() {
                             break; // consumer gone

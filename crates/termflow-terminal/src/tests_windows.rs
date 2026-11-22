@@ -8,6 +8,48 @@ use termflow_types::ShellKind;
 
 use super::*;
 
+const DSR: &[u8] = b"\x1b[6n";
+
+fn count(hay: &[u8], needle: &[u8]) -> usize {
+    hay.windows(needle.len()).filter(|w| *w == needle).count()
+}
+
+/// Waits for the next finished block. Like xterm.js does in the app, answers every cursor
+/// position query (`ESC[6n`): `ConPTY`, started with `INHERIT_CURSOR`, sends nothing else until
+/// its first query is answered, and `PSReadLine` asks again later.
+async fn next_block(
+    mgr: &TerminalManager,
+    id: TerminalId,
+    rx: &mut broadcast::Receiver<AppEvent>,
+    out: &Arc<Mutex<Vec<u8>>>,
+    answered: &mut usize,
+) -> Block {
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let asked = count(&out.lock().unwrap(), DSR);
+        while *answered < asked {
+            mgr.write(id, b"\x1b[1;1R").unwrap();
+            *answered += 1;
+        }
+        tokio::select! {
+            ev = rx.recv() => match ev.unwrap() {
+                AppEvent::BlockFinished { block } => return block,
+                AppEvent::BlocksDegraded { reason, .. } => panic!("degraded (ConPTY reordering?): {reason}"),
+                AppEvent::TerminalExited { exit_code, .. } => {
+                    panic!("shell exited ({exit_code:?}); output: {:?}", String::from_utf8_lossy(&out.lock().unwrap()))
+                }
+                AppEvent::BlockStarted { .. } => {}
+            },
+            () = tokio::time::sleep(Duration::from_millis(100)) => {}
+        }
+        assert!(
+            Instant::now() < deadline,
+            "timeout; raw output: {:?}",
+            String::from_utf8_lossy(&out.lock().unwrap())
+        );
+    }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn pwsh_blocks() {
     let Some(pwsh) = termflow_pty::find_on_path("pwsh") else {
@@ -42,31 +84,15 @@ async fn pwsh_blocks() {
             }),
         )
         .unwrap();
-
-    let mut next = async || {
-        tokio::time::timeout(Duration::from_secs(60), async {
-            loop {
-                match rx.recv().await.unwrap() {
-                    AppEvent::BlockFinished { block } => return Ok(block),
-                    AppEvent::BlocksDegraded { reason, .. } => return Err(reason),
-                    _ => {}
-                }
-            }
-        })
-        .await
-    };
+    let mut answered = 0;
 
     mgr.write(id, b"echo hello\r").unwrap();
-    let b0 = match next().await {
-        Ok(Ok(b)) => b,
-        Ok(Err(reason)) => panic!("degraded (ConPTY reordering?): {reason}"),
-        Err(_) => panic!("timeout; output:\n{}", String::from_utf8_lossy(&out.lock().unwrap())),
-    };
+    let b0 = next_block(&mgr, id, &mut rx, &out, &mut answered).await;
     assert_eq!(b0.command, "echo hello");
     assert_eq!(b0.exit_code, Some(0));
 
     mgr.write(id, b"cmd /c exit 7\r").unwrap();
-    let b1 = next().await.unwrap().unwrap();
+    let b1 = next_block(&mgr, id, &mut rx, &out, &mut answered).await;
     assert_eq!(b1.exit_code, Some(7));
     mgr.close(id).unwrap();
 }
