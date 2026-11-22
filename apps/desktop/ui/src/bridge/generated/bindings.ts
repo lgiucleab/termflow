@@ -10,20 +10,59 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 /** Commands */
 export const commands = {
 	appInfo: (options?: InvokeOptions) => __TAURI_INVOKE<AppInfo>("app_info", undefined, options),
-	/**  Start the M0 demo ticker (idempotent). */
-	startTicker: (options?: InvokeOptions) => __TAURI_INVOKE<null>("start_ticker", undefined, options),
+	appConfig: (options?: InvokeOptions) => __TAURI_INVOKE<Config_Serialize>("app_config", undefined, options),
+	listShells: (options?: InvokeOptions) => __TAURI_INVOKE<ShellSpec[]>("list_shells", undefined, options),
+	listAgents: (options?: InvokeOptions) => __TAURI_INVOKE<AgentCli[]>("list_agents", undefined, options),
+	terminalOpen: (req: OpenTerminal_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<TerminalId>("terminal_open", { req }, options),
+	terminalWrite: (id: TerminalId, data: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("terminal_write", { id, data }, options),
+	terminalResize: (id: TerminalId, cols: number, rows: number, options?: InvokeOptions) => __TAURI_INVOKE<null>("terminal_resize", { id, cols, rows }, options),
+	terminalSetPaused: (id: TerminalId, paused: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("terminal_set_paused", { id, paused }, options),
+	terminalClose: (id: TerminalId, options?: InvokeOptions) => __TAURI_INVOKE<null>("terminal_close", { id }, options),
+	blockOutput: (id: BlockId, options?: InvokeOptions) => __TAURI_INVOKE<BlockOutput_Serialize | null>("block_output", { id }, options),
+	recentBlocks: (limit: number, options?: InvokeOptions) => __TAURI_INVOKE<Block_Serialize[]>("recent_blocks", { limit }, options),
+	settingGet: (key: string, options?: InvokeOptions) => __TAURI_INVOKE<string | null>("setting_get", { key }, options),
+	settingSet: (key: string, valueJson: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("setting_set", { key, valueJson }, options),
+	/**  Debug builds: the UI's frame-time monitor reports here so results land in the log. */
+	perfReport: (report: string, options?: InvokeOptions) => __TAURI_INVOKE<void>("perf_report", { report }, options),
 };
 
 /** Events */
 export const events = {
-	coreEvent: makeEvent<CoreEvent, CoreEvent>("core-event"),
+	coreEvent: makeEvent<CoreEvent_Serialize, CoreEvent_Deserialize>("core-event"),
 };
 
 /* Types */
+/**  An agent CLI found on PATH (Claude Code, Codex, ...). Names are plain text, no logos. */
+export type AgentCli = {
+	id: string,
+	name: string,
+	program: string,
+};
+
 /**  Events published on the core event bus; the UI subscribes to them. */
-export type AppEvent = 
-/**  Demo heartbeat proving the Rust → UI event path (M0). */
-{ type: "tick"; n: number };
+export type AppEvent = AppEvent_Serialize | AppEvent_Deserialize;
+
+/**  Events published on the core event bus; the UI subscribes to them. */
+export type AppEvent_Deserialize = 
+/**  A command started running in a terminal (shell integration mark `C`). */
+{ type: "block_started"; block: Block_Deserialize } | 
+/**  A command finished (mark `D`, or the next prompt if `D` was lost). */
+{ type: "block_finished"; block: Block_Deserialize } | 
+/**  Shell marks arrived out of order or broken; blocks are off for this terminal. */
+{ type: "blocks_degraded"; terminal_id: TerminalId; reason: string } | 
+/**  The terminal's process exited. */
+{ type: "terminal_exited"; terminal_id: TerminalId; exit_code?: number | null };
+
+/**  Events published on the core event bus; the UI subscribes to them. */
+export type AppEvent_Serialize = 
+/**  A command started running in a terminal (shell integration mark `C`). */
+{ type: "block_started"; block: Block_Serialize } | 
+/**  A command finished (mark `D`, or the next prompt if `D` was lost). */
+{ type: "block_finished"; block: Block_Serialize } | 
+/**  Shell marks arrived out of order or broken; blocks are off for this terminal. */
+{ type: "blocks_degraded"; terminal_id: TerminalId; reason: string } | 
+/**  The terminal's process exited. */
+{ type: "terminal_exited"; terminal_id: TerminalId; exit_code: number | null };
 
 /**  Basic information about the running app, shown in the UI. */
 export type AppInfo = {
@@ -31,8 +70,180 @@ export type AppInfo = {
 	version: string,
 };
 
+/**  One command run in a terminal, as delimited by shell integration marks. */
+export type Block = Block_Serialize | Block_Deserialize;
+
+export type BlockId = string;
+
+export type BlockOutput = BlockOutput_Serialize | BlockOutput_Deserialize;
+
+export type BlockOutput_Deserialize = {
+	block: Block_Deserialize,
+	output: string,
+};
+
+export type BlockOutput_Serialize = {
+	block: Block_Serialize,
+	output: string,
+};
+
+/**  One command run in a terminal, as delimited by shell integration marks. */
+export type Block_Deserialize = {
+	id: BlockId,
+	terminal_id: TerminalId,
+	/**  0-based index of this command within its terminal; the UI matches its own marks by it. */
+	seq: number,
+	command: string,
+	cwd?: string | null,
+	git_branch?: string | null,
+	shell: string,
+	exit_code?: number | null,
+	/**  RFC 3339. */
+	started_at: string,
+	finished_at?: string | null,
+};
+
+/**  One command run in a terminal, as delimited by shell integration marks. */
+export type Block_Serialize = {
+	id: BlockId,
+	terminal_id: TerminalId,
+	/**  0-based index of this command within its terminal; the UI matches its own marks by it. */
+	seq: number,
+	command: string,
+	cwd: string | null,
+	git_branch: string | null,
+	shell: string,
+	exit_code: number | null,
+	/**  RFC 3339. */
+	started_at: string,
+	finished_at: string | null,
+};
+
+export type Config = Config_Serialize | Config_Deserialize;
+
+export type Config_Deserialize = {
+	ui?: UiConfig_Deserialize,
+	terminal?: TerminalConfig_Deserialize,
+	updates?: UpdatesConfig_Deserialize,
+};
+
+export type Config_Serialize = {
+	ui: UiConfig_Serialize,
+	terminal: TerminalConfig_Serialize,
+	updates: UpdatesConfig_Serialize,
+};
+
 /**  Every core bus event, forwarded to the webview. */
-export type CoreEvent = AppEvent;
+export type CoreEvent = CoreEvent_Serialize | CoreEvent_Deserialize;
+
+/**  Every core bus event, forwarded to the webview. */
+export type CoreEvent_Deserialize = AppEvent_Deserialize;
+
+/**  Every core bus event, forwarded to the webview. */
+export type CoreEvent_Serialize = AppEvent_Serialize;
+
+export type OpenTerminal = OpenTerminal_Serialize | OpenTerminal_Deserialize;
+
+export type OpenTerminal_Deserialize = {
+	/**  Shell id from `list_shells`; unset = configured or default shell. */
+	shell_id?: string | null,
+	cwd?: string | null,
+	cols: number,
+	rows: number,
+	/**  Agent CLI id from `list_agents`, started in the new shell. */
+	agent_id?: string | null,
+	/**  `Channel.toJSON()` of a channel receiving raw output bytes (`ArrayBuffer`). */
+	on_output: string,
+};
+
+export type OpenTerminal_Serialize = {
+	/**  Shell id from `list_shells`; unset = configured or default shell. */
+	shell_id: string | null,
+	cwd: string | null,
+	cols: number,
+	rows: number,
+	/**  Agent CLI id from `list_agents`, started in the new shell. */
+	agent_id: string | null,
+	/**  `Channel.toJSON()` of a channel receiving raw output bytes (`ArrayBuffer`). */
+	on_output: string,
+};
+
+/**  Which family a shell belongs to; decides how shell integration is injected. */
+export type ShellKind = "zsh" | "bash" | "fish" | "nu" | "pwsh" | "power_shell" | "cmd" | "wsl" | "other";
+
+/**  A shell the user can open a terminal with. */
+export type ShellSpec = {
+	/**  Stable id for settings and the UI, e.g. `zsh`, `pwsh`, `wsl:Ubuntu`. */
+	id: string,
+	name: string,
+	program: string,
+	args: string[],
+	kind: ShellKind,
+};
+
+export type TerminalConfig = TerminalConfig_Serialize | TerminalConfig_Deserialize;
+
+export type TerminalConfig_Deserialize = {
+	/**  Shell id (`zsh`, `pwsh`, `wsl:Ubuntu`, ...). Unset = the user's login shell. */
+	shell?: string | null,
+	/**  Inject `OSC 133` shell integration (needed for blocks). */
+	shell_integration?: boolean,
+	/**  Unset = bundled `JetBrains Mono`. */
+	font_family?: string | null,
+	font_size?: number,
+	ligatures?: boolean,
+	copy_on_select?: boolean,
+	/**  Ask before pasting text that contains line breaks. */
+	warn_multiline_paste?: boolean,
+	/**  Lines kept per terminal. */
+	scrollback?: number,
+};
+
+export type TerminalConfig_Serialize = {
+	/**  Shell id (`zsh`, `pwsh`, `wsl:Ubuntu`, ...). Unset = the user's login shell. */
+	shell: string | null,
+	/**  Inject `OSC 133` shell integration (needed for blocks). */
+	shell_integration: boolean,
+	/**  Unset = bundled `JetBrains Mono`. */
+	font_family: string | null,
+	font_size: number,
+	ligatures: boolean,
+	copy_on_select: boolean,
+	/**  Ask before pasting text that contains line breaks. */
+	warn_multiline_paste: boolean,
+	/**  Lines kept per terminal. */
+	scrollback: number,
+};
+
+export type TerminalId = string;
+
+export type UiConfig = UiConfig_Serialize | UiConfig_Deserialize;
+
+export type UiConfig_Deserialize = {
+	/**  UI theme id. */
+	theme?: string,
+	/**  UI language (`en`, `es-ES`). Unset = follow the OS. */
+	locale?: string | null,
+};
+
+export type UiConfig_Serialize = {
+	/**  UI theme id. */
+	theme: string,
+	/**  UI language (`en`, `es-ES`). Unset = follow the OS. */
+	locale: string | null,
+};
+
+export type UpdatesConfig = UpdatesConfig_Serialize | UpdatesConfig_Deserialize;
+
+export type UpdatesConfig_Deserialize = {
+	/**  Check for updates on startup (the only request made without a configured provider). */
+	check?: boolean,
+};
+
+export type UpdatesConfig_Serialize = {
+	/**  Check for updates on startup (the only request made without a configured provider). */
+	check: boolean,
+};
 
 /* Tauri Specta runtime */
 type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;

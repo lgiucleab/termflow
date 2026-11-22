@@ -45,8 +45,21 @@ jobs:
       - run: pnpm -C apps/desktop/ui typecheck
       - run: pnpm -C apps/desktop/ui test
 
+  terminal-tests:
+    # Real-shell PTY tests on the desktop platforms (zsh/bash on macOS, pwsh via ConPTY on Windows).
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p termflow-pty -p termflow-shell-integ -p termflow-terminal -- --nocapture
+
   build:
-    needs: check
+    needs: [check, terminal-tests]
     strategy:
       fail-fast: false
       matrix:
