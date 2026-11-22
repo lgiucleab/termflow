@@ -29,7 +29,7 @@ async fn pwsh_blocks() {
     };
     let id = mgr
         .open(
-            OpenOptions {
+            &OpenOptions {
                 shell,
                 cwd: Some(dir.path().into()),
                 cols: 120,
