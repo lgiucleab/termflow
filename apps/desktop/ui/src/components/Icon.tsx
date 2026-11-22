@@ -15,6 +15,21 @@ const paths: Record<string, string> = {
   search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z M20 20l-4-4",
   up: "M6 15l6-6 6 6",
   down: "M6 9l6 6 6-6",
+  terminal: "M4 5h16v14H4z M8 10l3 2-3 2 M13 15h3",
+  file: "M6 3h8l4 4v14H6z M14 3v4h4",
+  edit: "M4 20h4L19 9l-4-4L4 16z M13 7l4 4",
+  globe: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M3 12h18 M12 3c3 3 3 15 0 18 M12 3c-3 3-3 15 0 18",
+  list: "M9 6h11 M9 12h11 M9 18h11 M4 6h1 M4 12h1 M4 18h1",
+  tool: "M14 6a4 4 0 0 0 5 5l-8 8a2 2 0 0 1-3-3l8-8a4 4 0 0 0-2-2z",
+  sidebar: "M4 5h16v14H4z M9 5v14",
+  panelRight: "M4 5h16v14H4z M15 5v14",
+  settings:
+    "M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z M12 2v3 M12 19v3 M4.9 4.9l2.1 2.1 M17 17l2.1 2.1 M2 12h3 M19 12h3 M4.9 19.1L7 17 M17 7l2.1-2.1",
+  command: "M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3z",
+  arrowUp: "M12 19V5 M5 12l7-7 7 7",
+  stop: "M7 7h10v10H7z",
+  enter: "M20 5v7a3 3 0 0 1-3 3H5 M9 11l-4 4 4 4",
+  folder: "M3 6h6l2 2h10v11H3z",
 };
 
 export function Icon(props: { name: keyof typeof paths | string; size?: number }): JSX.Element {

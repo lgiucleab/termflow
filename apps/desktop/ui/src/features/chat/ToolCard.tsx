@@ -1,5 +1,7 @@
-import { createSignal, Show } from "solid-js";
-import type { ApprovalKind, Part } from "../../bridge";
+// Tool calls as one-line timeline rows (M2d, OpenCode-style): icon · summary · status, click to
+// expand args and output. Approvals moved to the PermissionDock above the composer.
+import { createSignal, For, Show } from "solid-js";
+import type { Part } from "../../bridge";
 import { Icon } from "../../components/Icon";
 import { t } from "../../i18n";
 
@@ -9,6 +11,11 @@ type ToolResult = Extract<Part, { type: "tool_result" }>;
 export interface Pending {
   summary: string;
   preview: string | null;
+}
+
+export interface Todo {
+  content: string;
+  status: string;
 }
 
 /** One-line description of a call from its arguments. */
@@ -37,25 +44,71 @@ export function callSummary(c: ToolCall): string {
   }
 }
 
+export const todosOf = (c: ToolCall): Todo[] =>
+  ((c.args as { todos?: Todo[] })?.todos ?? []).slice(0, 50);
+
+const ICONS: Record<string, string> = {
+  bash: "terminal",
+  read: "file",
+  ls: "file",
+  grep: "search",
+  glob: "search",
+  write: "edit",
+  edit: "edit",
+  apply_patch: "edit",
+  webfetch: "globe",
+  todo: "list",
+};
+
 function resultText(r: ToolResult): string {
   return r.content.map((c) => c.text).join("");
 }
 
-function TodoList(props: { args: unknown }) {
-  const todos = () =>
-    ((props.args as { todos?: { content: string; status: string }[] })?.todos ?? []).slice(0, 50);
+export function TodoList(props: { todos: Todo[] }) {
   return (
     <ul class="tf-todos">
-      {todos().map((td) => (
-        <li data-status={td.status}>
-          <span aria-hidden="true">
-            {td.status === "completed" ? "✓" : td.status === "in_progress" ? "◐" : "○"}
-          </span>{" "}
-          {td.content}
-        </li>
-      ))}
+      <For each={props.todos}>
+        {(td) => (
+          <li data-status={td.status}>
+            <span class="tf-todo-glyph" aria-hidden="true">
+              {td.status === "completed" ? "✓" : td.status === "in_progress" ? "◐" : "○"}
+            </span>
+            <span>{td.content}</span>
+          </li>
+        )}
+      </For>
     </ul>
   );
+}
+
+/** Colour-coded unified diff (also used by the permission dock). */
+export function Diff(props: { text: string }) {
+  return (
+    <pre class="tf-diff">
+      {props.text.split("\n").map((l) => (
+        <span
+          data-kind={
+            l.startsWith("+") && !l.startsWith("+++")
+              ? "add"
+              : l.startsWith("-") && !l.startsWith("---")
+                ? "del"
+                : ""
+          }
+        >
+          {l}
+          {"\n"}
+        </span>
+      ))}
+    </pre>
+  );
+}
+
+type Status = "approval" | "error" | "done" | "running" | "queued";
+
+function statusOf(p: { result?: ToolResult; running: boolean; pending?: Pending }): Status {
+  if (p.pending) return "approval";
+  if (p.result) return p.result.is_error ? "error" : "done";
+  return p.running ? "running" : "queued";
 }
 
 export function ToolCard(props: {
@@ -63,107 +116,74 @@ export function ToolCard(props: {
   result?: ToolResult;
   running: boolean;
   pending?: Pending;
-  onDecide: (kind: ApprovalKind, feedback: string | null) => void;
 }) {
   const [open, setOpen] = createSignal(false);
-  const [feedback, setFeedback] = createSignal("");
-  const [askFeedback, setAskFeedback] = createSignal(false);
-  const status = () =>
-    props.pending
-      ? "approval"
-      : props.result
-        ? props.result.is_error
-          ? "error"
-          : "done"
-        : props.running
-          ? "running"
-          : "queued";
+  const status = () => statusOf(props);
   return (
-    <div class="tf-toolcard" data-status={status()}>
+    <div class="tf-tool tf-row-tool" data-status={status()}>
       <button
         type="button"
-        class="tf-toolcard-head"
+        class="tf-tool-head"
         aria-expanded={open()}
         onClick={() => setOpen((o) => !o)}
       >
-        <Icon name={open() ? "chevronDown" : "chevronRight"} size={11} />
-        <span class="tf-tool-status" aria-hidden="true">
-          {status() === "done"
-            ? "✓"
-            : status() === "error"
-              ? "✗"
-              : status() === "running"
-                ? "…"
-                : status() === "approval"
-                  ? "?"
-                  : "·"}
+        <span class="tf-tool-icon">
+          <Icon name={ICONS[props.call.name] ?? "tool"} size={13} />
         </span>
         <code>{callSummary(props.call)}</code>
         <span class="tf-tool-state">{t(`tools.status.${status()}`)}</span>
+        <span class="tf-tool-chevron">
+          <Icon name={open() ? "chevronDown" : "chevronRight"} size={12} />
+        </span>
       </button>
-      <Show when={props.call.name === "todo"}>
-        <TodoList args={props.call.args} />
-      </Show>
-      <Show when={props.pending}>
-        {(p) => (
-          <section class="tf-approval" aria-label={t("tools.approvalTitle")}>
-            <Show when={p().preview}>
-              <pre class="tf-diff">
-                {(p().preview ?? "").split("\n").map((l) => (
-                  <span
-                    data-kind={
-                      l.startsWith("+") && !l.startsWith("+++")
-                        ? "add"
-                        : l.startsWith("-") && !l.startsWith("---")
-                          ? "del"
-                          : ""
-                    }
-                  >
-                    {l}
-                    {"\n"}
-                  </span>
-                ))}
-              </pre>
-            </Show>
-            <Show when={askFeedback()}>
-              <input
-                class="tf-feedback"
-                placeholder={t("tools.feedbackHint")}
-                value={feedback()}
-                onInput={(e) => setFeedback(e.currentTarget.value)}
-                onKeyDown={(e) => e.key === "Enter" && props.onDecide("deny", feedback())}
-              />
-            </Show>
-            <div class="tf-approval-actions">
-              <button
-                type="button"
-                class="tf-primary-sm"
-                onClick={() => props.onDecide("allow_once", null)}
-              >
-                {t("tools.allowOnce")}
-              </button>
-              <button type="button" onClick={() => props.onDecide("allow_session", null)}>
-                {t("tools.allowSession")}
-              </button>
-              <button type="button" onClick={() => props.onDecide("deny", null)}>
-                {t("tools.deny")}
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  askFeedback() ? props.onDecide("deny", feedback()) : setAskFeedback(true)
-                }
-              >
-                {t("tools.denyFeedback")}
-              </button>
-            </div>
-          </section>
-        )}
+      <Show when={props.call.name === "todo" && !open()}>
+        <TodoList todos={todosOf(props.call)} />
       </Show>
       <Show when={open()}>
-        <div class="tf-toolcard-body">
+        <div class="tf-tool-body">
           <pre class="tf-tool-args">{JSON.stringify(props.call.args, null, 2)}</pre>
           <Show when={props.result}>{(r) => <pre class="tf-tool-out">{resultText(r())}</pre>}</Show>
+        </div>
+      </Show>
+    </div>
+  );
+}
+
+/** A run of read-only lookups shown as one "Explored N files" row. */
+export function ExploreRow(props: {
+  calls: ToolCall[];
+  results: Map<string, ToolResult>;
+  running: ReadonlySet<string>;
+}) {
+  const [open, setOpen] = createSignal(false);
+  const busy = () => props.calls.some((c) => !props.results.has(c.call_id));
+  return (
+    <div class="tf-tool tf-row-tool" data-status={busy() ? "running" : "done"}>
+      <button
+        type="button"
+        class="tf-tool-head"
+        aria-expanded={open()}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span class="tf-tool-icon">
+          <Icon name="search" size={13} />
+        </span>
+        <span class="tf-tool-label">{t("layout.explored", { n: String(props.calls.length) })}</span>
+        <span class="tf-tool-chevron">
+          <Icon name={open() ? "chevronDown" : "chevronRight"} size={12} />
+        </span>
+      </button>
+      <Show when={open()}>
+        <div class="tf-tool-group">
+          <For each={props.calls}>
+            {(c) => (
+              <ToolCard
+                call={c}
+                result={props.results.get(c.call_id)}
+                running={props.running.has(c.call_id)}
+              />
+            )}
+          </For>
         </div>
       </Show>
     </div>

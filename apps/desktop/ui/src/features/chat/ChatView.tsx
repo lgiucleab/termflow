@@ -15,10 +15,21 @@ import {
 import type { AgentSession, ApprovalKind, Block, ModelInfo, Part, Turn } from "../../bridge";
 import { useBridge } from "../../bridge/context";
 import { Icon } from "../../components/Icon";
+import { ResizeHandle } from "../../components/ResizeHandle";
 import { t } from "../../i18n";
-import { isMac } from "../../keybindings";
+import { isMac, shortcutLabel } from "../../keybindings";
 import { attachments, detach } from "../../stores/agent";
 import { onAgentEvent, sessionOf } from "../../stores/agentEvents";
+import {
+  bottomHeight,
+  density,
+  rightOpen,
+  rightWidth,
+  setBottomHeight,
+  setRightOpen,
+  setRightTab,
+  setRightWidth,
+} from "../../stores/layout";
 import { busy, markBusy, project, refreshChats } from "../../stores/project";
 import {
   credentials,
@@ -33,8 +44,11 @@ import { rank } from "../palette/fuzzy";
 import { blockMarkdown, formatDuration } from "../terminal/markdown";
 import { type ChatShell, type FinishedBlock, shellFor } from "./chatShell";
 import { classify, type InputMode, stripOverride } from "./classify";
+import { groupParts } from "./group";
+import { PermissionDock } from "./PermissionDock";
+import { type ContextItem, RightPanel } from "./RightPanel";
 import { matchSlash, mentionQuery, type SlashCommand, slashQuery } from "./slash";
-import { type Pending, ToolCard } from "./ToolCard";
+import { ExploreRow, type Pending, type Todo, ToolCard, todosOf } from "./ToolCard";
 import { splitUserText } from "./userText";
 
 const ERROR_CLASSES = [
@@ -251,7 +265,9 @@ export function ChatView(props: {
   const [dismissed, setDismissed] = createSignal<ReadonlySet<string>>(new Set());
   const [history, setHistory] = createSignal<string[]>([]);
   const [histIdx, setHistIdx] = createSignal(-1);
+  const [modelOpen, setModelOpen] = createSignal(false);
   let list!: HTMLDivElement;
+  let main!: HTMLDivElement;
   let box: HTMLTextAreaElement | undefined;
   let modelInput: HTMLInputElement | undefined;
   let rawSlot: HTMLDivElement | undefined;
@@ -449,6 +465,38 @@ export function ChatView(props: {
       .slice(-AUTO_ATTACH);
   });
 
+  /** The agent's latest todo list (the last `todo` call wins). */
+  const todos = createMemo((): Todo[] => {
+    let last: Todo[] = [];
+    for (const turn of turns())
+      for (const p of turn.parts)
+        if (p.type === "tool_call" && p.name === "todo") last = todosOf(p);
+    return last;
+  });
+
+  const context = createMemo((): ContextItem[] => [
+    ...autoBlocks().map((b) => ({
+      key: b.key,
+      label: b.command,
+      detail: b.exit === 0 ? "✓" : `✗ ${b.exit ?? "?"}`,
+      onRemove: () => setDismissed((d) => new Set([...d, b.key])),
+    })),
+    ...attachments().map((a) => ({
+      key: a.block.id,
+      label: a.block.command,
+      onRemove: () => detach(a.block.id),
+    })),
+  ]);
+
+  // The input grows with its content up to 180px (OpenCode's composer height).
+  createEffect(
+    on(input, () => {
+      if (!box) return;
+      box.style.height = "auto";
+      box.style.height = `${Math.min(box.scrollHeight, 180)}px`;
+    }),
+  );
+
   createEffect(() => {
     items();
     live();
@@ -494,6 +542,7 @@ export function ChatView(props: {
     };
     await bridge.settingSet(LAST_MODEL_KEY, JSON.stringify(choice));
     setSession(await bridge.agentSession(s.id));
+    setModelOpen(false);
   };
 
   const applyProfile = async (name: string) => {
@@ -522,6 +571,7 @@ export function ChatView(props: {
         if (s && plan() !== (c.id === "plan")) await toggleMode();
         return note(t(c.id === "plan" ? "slash.nowPlan" : "slash.nowBuild"));
       case "model":
+        setModelOpen(true);
         return queueMicrotask(() => modelInput?.focus());
       case "clear":
         return props.onNewChat();
@@ -733,14 +783,17 @@ export function ChatView(props: {
       <Show
         when={turn.role === "user"}
         fallback={
-          <For each={turn.parts}>
-            {(p) => {
+          <For each={groupParts(turn.parts)}>
+            {(row) => {
+              if (row.kind === "explore")
+                return <ExploreRow calls={row.calls} results={results()} running={running()} />;
+              const p = row.part;
               if (p.type === "text") return <Markdown text={p.text} />;
               if (p.type === "reasoning")
                 return (
                   <Show when={p.summary_text}>
-                    <details class="tf-reasoning">
-                      <summary>{t("agent.reasoning")}</summary>
+                    <details class="tf-reasoning tf-row-think">
+                      <summary>{t("layout.thinking")}</summary>
                       <p>{p.summary_text}</p>
                     </details>
                   </Show>
@@ -752,7 +805,6 @@ export function ChatView(props: {
                     result={results().get(p.call_id)}
                     running={running().has(p.call_id)}
                     pending={pending()[p.call_id]}
-                    onDecide={(k, f) => void decide(p.call_id, k, f)}
                   />
                 );
               return null;
@@ -765,13 +817,8 @@ export function ChatView(props: {
             turn.parts.map((p) => (p.type === "text" ? p.text : "")).join(""),
           );
           return (
-            <>
-              <p class="tf-user-text">
-                <span class="tf-prompt-glyph" aria-hidden="true">
-                  ✦
-                </span>{" "}
-                {v.text}
-              </p>
+            <div class="tf-user">
+              <p class="tf-user-text">{v.text}</p>
               <For each={v.files}>
                 {(f) => (
                   <details class="tf-attached">
@@ -782,210 +829,443 @@ export function ChatView(props: {
                   </details>
                 )}
               </For>
-            </>
+            </div>
           );
         })()}
       </Show>
       <Show when={turn.role === "assistant" && turn.served_by}>
-        <span class="tf-served">{t("agent.servedBy", { model: turn.served_by?.model ?? "" })}</span>
+        <span class="tf-served">{turn.served_by?.model ?? ""}</span>
       </Show>
     </div>
   );
 
+  const credLabel = (id: string | null | undefined) =>
+    credentials().find((c) => c.id === id)?.label ?? "";
+  const empty = () => items().length === 0 && !live() && !liveBlock() && notes().length === 0;
+  const degraded = () => shellState() === "degraded";
+
   return (
-    <div class="tf-chatview">
-      <header class="tf-agent-head">
-        <button
-          type="button"
-          class="tf-mode"
-          data-plan={plan() ? "1" : "0"}
-          title={t("agent.modeHint")}
-          onClick={() => void toggleMode()}
-        >
-          {plan() ? t("agent.plan") : t("agent.build")}
-        </button>
-        <span class="tf-agent-model" title={session()?.model ?? ""}>
-          {session()?.title ?? t("chats.untitled")}
-        </span>
-        <Show
-          when={credentials().length > 0}
-          fallback={
-            <button type="button" class="tf-primary-sm" onClick={() => setProvidersOpen(true)}>
-              {t("agent.addProvider")}
-            </button>
-          }
-        >
-          <Show when={profiles().length > 0}>
-            <select
-              aria-label={t("route.profile")}
-              title={t("route.profileHint")}
-              value={session()?.profile ?? ""}
-              onChange={(e) => void applyProfile(e.currentTarget.value)}
-            >
-              <option value="">{t("route.pinned")}</option>
-              <For each={profiles()}>{(p) => <option value={p}>{p}</option>}</For>
-            </select>
-          </Show>
-          <select
-            aria-label={t("agent.credential")}
-            value={pickCred()}
-            onChange={(e) => {
-              setPickCred(e.currentTarget.value);
-              setPickModel("");
-              void loadModels(e.currentTarget.value);
-            }}
-          >
-            <For each={credentials()}>{(c) => <option value={c.id}>{c.label}</option>}</For>
-          </select>
-          <input
-            ref={modelInput}
-            list={`tf-models-${props.sessionId}`}
-            aria-label={t("agent.model")}
-            placeholder={t("agent.modelHint")}
-            value={pickModel()}
-            onInput={(e) => setPickModel(e.currentTarget.value)}
-            onKeyDown={(e) => e.key === "Enter" && void applyModel()}
-          />
-          <datalist id={`tf-models-${props.sessionId}`}>
-            <For each={models()}>
-              {(m) => <option value={m.id}>{m.display_name ?? m.id}</option>}
-            </For>
-          </datalist>
-          <label class="tf-check">
-            <input
-              type="checkbox"
-              checked={pickReasoning()}
-              onChange={(e) => setPickReasoning(e.currentTarget.checked)}
-            />
-            {t("agent.reasoningToggle")}
-          </label>
+    <div class="tf-session-row">
+      <div
+        class="tf-session"
+        ref={main}
+        data-empty={empty() ? "1" : "0"}
+        data-degraded={degraded() ? "1" : "0"}
+      >
+        <header class="tf-session-head">
+          <h1 class="tf-session-title" title={session()?.title ?? ""}>
+            {session()?.title ?? t("chats.untitled")}
+          </h1>
+          <span class="tf-faint tf-session-state">{t(`shell.state.${shellState()}`)}</span>
+          <span class="tf-spacer" />
           <button
             type="button"
-            onClick={() => void applyModel()}
-            disabled={
-              !pickCred() ||
-              !pickModel() ||
-              (pickModel() === session()?.model &&
-                pickCred() === session()?.credential_id &&
-                pickReasoning() === session()?.reasoning)
-            }
+            class="tf-icon-btn"
+            data-on={shell.rawOpen[0]() ? "1" : "0"}
+            title={`${t("shell.rawHint")} (${shortcutLabel("toggleTerminal", isMac())})`}
+            aria-label={t("layout.terminal")}
+            aria-pressed={shell.rawOpen[0]()}
+            onClick={() => (shell.rawOpen[0]() ? shell.closeRaw() : shell.rawOpen[1](true))}
           >
-            {t("agent.useModel")}
+            <Icon name="terminal" size={15} />
           </button>
+          <button
+            type="button"
+            class="tf-icon-btn"
+            data-on={rightOpen() ? "1" : "0"}
+            title={`${t("layout.toggleRight")} (${shortcutLabel("toggleRight", isMac())})`}
+            aria-label={t("layout.toggleRight")}
+            aria-pressed={rightOpen()}
+            onClick={() => setRightOpen(!rightOpen())}
+          >
+            <Icon name="panelRight" size={15} />
+          </button>
+        </header>
+        <Show when={modelsError()}>
+          <p class="tf-error" role="alert">
+            {t("agent.modelsFailed")}: {modelsError()}
+          </p>
         </Show>
-        <button
-          type="button"
-          class="tf-raw-toggle"
-          data-on={shell.rawOpen[0]() ? "1" : "0"}
-          title={t("shell.rawHint")}
-          onClick={() => (shell.rawOpen[0]() ? shell.closeRaw() : shell.rawOpen[1](true))}
-        >
-          {t("shell.raw")}
-        </button>
-      </header>
-      <Show when={modelsError()}>
-        <p class="tf-error" role="alert">
-          {t("agent.modelsFailed")}: {modelsError()}
-        </p>
-      </Show>
 
-      <div class="tf-timeline-wrap">
-        {/* biome-ignore lint/a11y/useKeyWithClickEvents: only intercepts link clicks; links stay keyboard-focusable. */}
-        <div class="tf-chat" ref={list} role="log" aria-live="polite" onClick={onLinkClick}>
-          <Show when={items().length === 0 && !live() && !liveBlock()}>
-            <div class="tf-chat-empty">
-              <p>
-                {project()
-                  ? t("agent.emptyProject", { name: project()?.name ?? "" })
-                  : t("agent.empty")}
-              </p>
-              <p class="tf-muted">{t("input.emptyHint")}</p>
-            </div>
-          </Show>
-          <For each={items()}>
-            {(it) =>
-              it.kind === "turn" ? (
-                renderTurn(it.turn)
-              ) : (
-                <BlockView
-                  block={it.block}
-                  onRerun={() => shell.run(it.block.command) || showToast(t("shell.busy"))}
-                  onAsk={() => {
-                    setDismissed((d) => {
-                      const n = new Set(d);
-                      n.delete(it.block.key);
-                      return n;
-                    });
-                    setLock("agent");
-                    box?.focus();
-                  }}
-                />
-              )
-            }
-          </For>
-          <Show when={liveBlock()}>
-            {(lb) => (
-              <div class="tf-block tf-block-live" data-alt={lb().alt() ? "1" : "0"}>
-                <div class="tf-block-head">
-                  <span class="tf-prompt-glyph" aria-hidden="true">
-                    $
+        <div class="tf-timeline-wrap">
+          {/* biome-ignore lint/a11y/useKeyWithClickEvents: only intercepts link clicks; links stay keyboard-focusable. */}
+          <div
+            class="tf-chat"
+            ref={list}
+            role="log"
+            aria-live="polite"
+            data-density={density()}
+            onClick={onLinkClick}
+          >
+            <Show when={empty()}>
+              <div class="tf-chat-empty">
+                <div class="tf-wordmark">termflow</div>
+                <p class="tf-faint">
+                  {project()
+                    ? t("agent.emptyProject", { name: project()?.name ?? "" })
+                    : t("agent.empty")}
+                </p>
+              </div>
+            </Show>
+            <For each={items()}>
+              {(it) =>
+                it.kind === "turn" ? (
+                  renderTurn(it.turn)
+                ) : (
+                  <BlockView
+                    block={it.block}
+                    onRerun={() => shell.run(it.block.command) || showToast(t("shell.busy"))}
+                    onAsk={() => {
+                      setDismissed((d) => {
+                        const n = new Set(d);
+                        n.delete(it.block.key);
+                        return n;
+                      });
+                      setLock("agent");
+                      box?.focus();
+                    }}
+                  />
+                )
+              }
+            </For>
+            <Show when={liveBlock()}>
+              {(lb) => (
+                <div class="tf-block tf-block-live" data-alt={lb().alt() ? "1" : "0"}>
+                  <div class="tf-block-head">
+                    <span class="tf-prompt-glyph" aria-hidden="true">
+                      $
+                    </span>
+                    <code class="tf-block-command">{lb().command}</code>
+                    <span class="tf-block-meta tf-running">{t("shell.running")}</span>
+                    <button
+                      type="button"
+                      class="tf-stop"
+                      onClick={() => shell.interrupt()}
+                      title="Ctrl+C"
+                    >
+                      {t("shell.stop")}
+                    </button>
+                  </div>
+                  <div
+                    class="tf-live-slot"
+                    style={
+                      lb().alt()
+                        ? undefined
+                        : { height: `${Math.min(24, lb().lines()) * lb().rowH() + 4}px` }
+                    }
+                    ref={(el) => queueMicrotask(() => shell.mountLive(el))}
+                  />
+                </div>
+              )}
+            </Show>
+            <Show when={live()}>
+              {(l) => (
+                <div class="tf-msg" data-role="assistant" aria-busy="true">
+                  <Show when={l().reasoning}>
+                    <details class="tf-reasoning tf-row-think" open>
+                      <summary class="tf-running">{t("layout.thinking")}</summary>
+                      <p>{l().reasoning}</p>
+                    </details>
+                  </Show>
+                  <Markdown text={l().text || "…"} />
+                  <span class="tf-served">{l().model}</span>
+                </div>
+              )}
+            </Show>
+            <For each={notes()}>
+              {(n) => (
+                <div class="tf-notice" data-kind="info">
+                  {n}
+                </div>
+              )}
+            </For>
+            <Show when={error()}>
+              {(err) => (
+                <div class="tf-notice" data-kind="danger" role="alert">
+                  <Icon name="warn" size={14} />
+                  <span>
+                    <strong>{errorLabel(err().cls)}</strong> {err().message}
                   </span>
-                  <code class="tf-block-command">{lb().command}</code>
-                  <span class="tf-block-meta tf-running">{t("shell.running")}</span>
                   <button
                     type="button"
-                    class="tf-stop"
-                    onClick={() => shell.interrupt()}
-                    title="Ctrl+C"
+                    class="tf-icon-btn"
+                    aria-label={t("common.close")}
+                    onClick={() => setError(null)}
                   >
-                    {t("shell.stop")}
+                    <Icon name="close" size={12} />
                   </button>
                 </div>
-                <div
-                  class="tf-live-slot"
-                  style={
-                    lb().alt()
-                      ? undefined
-                      : { height: `${Math.min(24, lb().lines()) * lb().rowH() + 4}px` }
-                  }
-                  ref={(el) => queueMicrotask(() => shell.mountLive(el))}
-                />
-              </div>
-            )}
+              )}
+            </Show>
+          </div>
+        </div>
+
+        <div class="tf-composer-wrap">
+          <PermissionDock pending={pending()} onDecide={(id, k, f) => void decide(id, k, f)} />
+          <Show when={todos().length > 0 && !rightOpen()}>
+            <button
+              type="button"
+              class="tf-pill"
+              onClick={() => {
+                setRightTab("todo");
+                setRightOpen(true);
+              }}
+            >
+              <Icon name="list" size={12} />
+              {t("layout.todoPill", {
+                done: String(todos().filter((x) => x.status === "completed").length),
+                total: String(todos().length),
+              })}
+            </button>
           </Show>
-          <Show when={live()}>
-            {(l) => (
-              <div class="tf-msg" data-role="assistant" aria-busy="true">
-                <Show when={l().reasoning}>
-                  <details class="tf-reasoning" open>
-                    <summary>{t("agent.thinking")}</summary>
-                    <p>{l().reasoning}</p>
-                  </details>
+          <div class="tf-composer" data-mode={mode()}>
+            <Show when={menu().length > 0}>
+              <div class="tf-menu" role="listbox" aria-label={t("agent.suggestions")}>
+                <For each={menu()}>
+                  {(item, i) => (
+                    <div
+                      role="option"
+                      tabIndex={-1}
+                      aria-selected={i() === menuSel()}
+                      data-selected={i() === menuSel() ? "1" : "0"}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        item.apply();
+                      }}
+                      onKeyDown={(e) => e.key === "Enter" && item.apply()}
+                    >
+                      <span>{item.label}</span>
+                      <Show when={item.hint}>
+                        <span class="tf-faint">{item.hint}</span>
+                      </Show>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </Show>
+            <Show when={autoBlocks().length > 0 || attachments().length > 0}>
+              <ul class="tf-chips" aria-label={t("agent.attached")}>
+                <For each={context()}>
+                  {(c) => (
+                    <li class="tf-chip" title={t("input.autoAttached")}>
+                      <Icon name="terminal" size={11} />
+                      <code>{c.label}</code>
+                      <Show when={c.detail}>
+                        <span class="tf-faint">{c.detail}</span>
+                      </Show>
+                      <button type="button" aria-label={t("agent.detach")} onClick={c.onRemove}>
+                        <Icon name="close" size={10} />
+                      </button>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </Show>
+            <textarea
+              ref={box}
+              rows={1}
+              value={input()}
+              placeholder={placeholder()}
+              aria-label={placeholder()}
+              spellcheck={false}
+              onInput={(e) => {
+                setInput(e.currentTarget.value);
+                setCursor(e.currentTarget.selectionStart ?? e.currentTarget.value.length);
+                setHistIdx(-1);
+              }}
+              onKeyUp={(e) => setCursor(e.currentTarget.selectionStart ?? 0)}
+              onClick={(e) => setCursor(e.currentTarget.selectionStart ?? 0)}
+              onKeyDown={onKey}
+            />
+            <div class="tf-composer-bar">
+              <button
+                type="button"
+                class="tf-chip-btn tf-agent-btn"
+                data-plan={plan() ? "1" : "0"}
+                title={t("layout.agentSelect", {
+                  name: plan() ? t("agent.plan") : t("agent.build"),
+                })}
+                onClick={() => void toggleMode()}
+              >
+                <span class="tf-agent-dot" aria-hidden="true" />
+                {plan() ? t("agent.plan") : t("agent.build")}
+              </button>
+              <Show
+                when={credentials().length > 0}
+                fallback={
+                  <button type="button" class="tf-chip-btn" onClick={() => setProvidersOpen(true)}>
+                    <Icon name="plus" size={12} />
+                    {t("agent.addProvider")}
+                  </button>
+                }
+              >
+                <button
+                  type="button"
+                  class="tf-chip-btn tf-model-btn"
+                  aria-expanded={modelOpen()}
+                  title={t("layout.modelTitle")}
+                  onClick={() => setModelOpen((o) => !o)}
+                >
+                  <Show
+                    when={session()?.profile}
+                    fallback={
+                      <>
+                        <span class="tf-faint">{credLabel(session()?.credential_id)}</span>
+                        <span>{session()?.model ?? t("layout.pickModel")}</span>
+                      </>
+                    }
+                  >
+                    <span class="tf-faint">{t("route.profile")}</span>
+                    <span>{session()?.profile}</span>
+                  </Show>
+                  <Icon name="chevronDown" size={11} />
+                </button>
+              </Show>
+              <span class="tf-spacer" />
+              <button
+                type="button"
+                class="tf-mode-glyph"
+                data-locked={lock() ? "1" : "0"}
+                title={t("input.modeToggle", { key: isMac() ? "⌘I" : "Ctrl+I" })}
+                aria-label={mode() === "shell" ? t("input.toShell") : t("input.toAgent")}
+                onClick={() => {
+                  setLock(mode() === "shell" ? "agent" : "shell");
+                  box?.focus();
+                }}
+              >
+                {mode() === "shell" ? "$" : "✦"}
+              </button>
+              <Show
+                when={isBusy()}
+                fallback={
+                  <button
+                    type="button"
+                    class="tf-submit"
+                    disabled={!input().trim()}
+                    aria-label={mode() === "shell" ? t("layout.run") : t("layout.send")}
+                    title={mode() === "shell" ? t("layout.run") : t("layout.send")}
+                    onClick={() => void submit()}
+                  >
+                    <Icon name={mode() === "shell" ? "enter" : "arrowUp"} size={14} />
+                  </button>
+                }
+              >
+                <button
+                  type="button"
+                  class="tf-submit"
+                  aria-label={t("agent.stop")}
+                  title={`${t("agent.stop")} (Esc)`}
+                  onClick={() => void bridge.agentCancel(props.sessionId)}
+                >
+                  <Icon name="stop" size={12} />
+                </button>
+              </Show>
+            </div>
+            <Show when={modelOpen()}>
+              <div
+                class="tf-popover tf-model-pop"
+                role="dialog"
+                aria-label={t("layout.modelTitle")}
+                onKeyDown={(e) => e.key === "Escape" && setModelOpen(false)}
+              >
+                <Show when={profiles().length > 0}>
+                  <label>
+                    {t("route.profile")}
+                    <select
+                      title={t("route.profileHint")}
+                      value={session()?.profile ?? ""}
+                      onChange={(e) => void applyProfile(e.currentTarget.value)}
+                    >
+                      <option value="">{t("route.pinned")}</option>
+                      <For each={profiles()}>{(p) => <option value={p}>{p}</option>}</For>
+                    </select>
+                  </label>
                 </Show>
-                <Markdown text={l().text || "…"} />
-                <span class="tf-served">{t("agent.servedBy", { model: l().model })}</span>
-              </div>
-            )}
-          </Show>
-          <For each={notes()}>{(n) => <div class="tf-note">{n}</div>}</For>
-          <Show when={error()}>
-            {(err) => (
-              <div class="tf-error-banner" role="alert">
-                <strong>{errorLabel(err().cls)}</strong> {err().message}
-                <button type="button" aria-label={t("common.close")} onClick={() => setError(null)}>
-                  <Icon name="close" size={12} />
+                <label>
+                  {t("agent.credential")}
+                  <select
+                    value={pickCred()}
+                    onChange={(e) => {
+                      setPickCred(e.currentTarget.value);
+                      setPickModel("");
+                      void loadModels(e.currentTarget.value);
+                    }}
+                  >
+                    <For each={credentials()}>{(c) => <option value={c.id}>{c.label}</option>}</For>
+                  </select>
+                </label>
+                <label>
+                  {t("agent.model")}
+                  <input
+                    ref={modelInput}
+                    list={`tf-models-${props.sessionId}`}
+                    placeholder={t("agent.modelHint")}
+                    value={pickModel()}
+                    onInput={(e) => setPickModel(e.currentTarget.value)}
+                    onKeyDown={(e) => e.key === "Enter" && void applyModel()}
+                  />
+                </label>
+                <datalist id={`tf-models-${props.sessionId}`}>
+                  <For each={models()}>
+                    {(m) => <option value={m.id}>{m.display_name ?? m.id}</option>}
+                  </For>
+                </datalist>
+                <label class="tf-check">
+                  <input
+                    type="checkbox"
+                    checked={pickReasoning()}
+                    onChange={(e) => setPickReasoning(e.currentTarget.checked)}
+                  />
+                  {t("agent.reasoningToggle")}
+                </label>
+                <button
+                  type="button"
+                  class="tf-btn"
+                  data-variant="primary"
+                  onClick={() => void applyModel()}
+                  disabled={
+                    !pickCred() ||
+                    !pickModel() ||
+                    (pickModel() === session()?.model &&
+                      pickCred() === session()?.credential_id &&
+                      pickReasoning() === session()?.reasoning)
+                  }
+                >
+                  {t("agent.useModel")}
                 </button>
               </div>
-            )}
-          </Show>
+            </Show>
+          </div>
         </div>
+
         <Show when={shell.rawOpen[0]()}>
-          <section class="tf-raw" aria-label={t("shell.raw")}>
-            <div class="tf-raw-bar">
-              <span>{shellState() === "degraded" ? t("shell.degraded") : t("shell.rawTitle")}</span>
-              <Show when={shellState() !== "degraded"}>
-                <button type="button" onClick={() => shell.closeRaw()}>
-                  {t("shell.backToTimeline")}
+          <section
+            class="tf-bottom"
+            aria-label={t("shell.raw")}
+            style={degraded() ? undefined : { height: `${bottomHeight()}px` }}
+          >
+            <Show when={!degraded()}>
+              <ResizeHandle
+                axis="y"
+                dir={-1}
+                label={t("layout.resizeBottom")}
+                size={bottomHeight}
+                onResize={(v) => setBottomHeight(v, main.clientHeight)}
+              />
+            </Show>
+            <div class="tf-bottom-bar">
+              <Icon name="terminal" size={13} />
+              <span>{degraded() ? t("shell.degraded") : t("shell.rawTitle")}</span>
+              <span class="tf-spacer" />
+              <Show when={!degraded()}>
+                <button
+                  type="button"
+                  class="tf-icon-btn"
+                  aria-label={t("layout.hideTerminal")}
+                  title={t("layout.hideTerminal")}
+                  onClick={() => shell.closeRaw()}
+                >
+                  <Icon name="chevronDown" size={14} />
                 </button>
               </Show>
             </div>
@@ -994,107 +1274,18 @@ export function ChatView(props: {
         </Show>
       </div>
 
-      <Show when={autoBlocks().length > 0 || attachments().length > 0}>
-        <ul class="tf-chips" aria-label={t("agent.attached")}>
-          <For each={autoBlocks()}>
-            {(b) => (
-              <li class="tf-chip" title={t("input.autoAttached")}>
-                <span aria-hidden="true">↳</span>
-                <code>{b.command}</code>
-                <span class="tf-exit" data-ok={b.exit === 0 ? "1" : "0"}>
-                  {b.exit === 0 ? "✓" : `✗ ${b.exit ?? "?"}`}
-                </span>
-                <button
-                  type="button"
-                  aria-label={t("agent.detach")}
-                  onClick={() => setDismissed((d) => new Set([...d, b.key]))}
-                >
-                  <Icon name="close" size={10} />
-                </button>
-              </li>
-            )}
-          </For>
-          <For each={attachments()}>
-            {(a) => (
-              <li class="tf-chip">
-                <code>{a.block.command}</code>
-                <button
-                  type="button"
-                  aria-label={t("agent.detach")}
-                  onClick={() => detach(a.block.id)}
-                >
-                  <Icon name="close" size={10} />
-                </button>
-              </li>
-            )}
-          </For>
-        </ul>
-      </Show>
-      <div class="tf-composer" data-mode={mode()}>
-        <Show when={menu().length > 0}>
-          <div class="tf-menu" role="listbox" aria-label={t("agent.suggestions")}>
-            <For each={menu()}>
-              {(item, i) => (
-                <div
-                  role="option"
-                  tabIndex={-1}
-                  aria-selected={i() === menuSel()}
-                  data-selected={i() === menuSel() ? "1" : "0"}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    item.apply();
-                  }}
-                  onKeyDown={(e) => e.key === "Enter" && item.apply()}
-                >
-                  <span>{item.label}</span>
-                  <Show when={item.hint}>
-                    <span class="tf-muted">{item.hint}</span>
-                  </Show>
-                </div>
-              )}
-            </For>
-          </div>
-        </Show>
-        <button
-          type="button"
-          class="tf-mode-glyph"
-          data-locked={lock() ? "1" : "0"}
-          title={t("input.modeToggle", { key: isMac() ? "⌘I" : "Ctrl+I" })}
-          aria-label={mode() === "shell" ? t("input.toShell") : t("input.toAgent")}
-          onClick={() => {
-            setLock(mode() === "shell" ? "agent" : "shell");
-            box?.focus();
-          }}
-        >
-          {mode() === "shell" ? "$" : "✦"}
-        </button>
-        <textarea
-          ref={box}
-          rows={1}
-          value={input()}
-          placeholder={placeholder()}
-          aria-label={placeholder()}
-          spellcheck={false}
-          onInput={(e) => {
-            setInput(e.currentTarget.value);
-            setCursor(e.currentTarget.selectionStart ?? e.currentTarget.value.length);
-            setHistIdx(-1);
-          }}
-          onKeyUp={(e) => setCursor(e.currentTarget.selectionStart ?? 0)}
-          onClick={(e) => setCursor(e.currentTarget.selectionStart ?? 0)}
-          onKeyDown={onKey}
+      <Show when={rightOpen()}>
+        <ResizeHandle
+          axis="x"
+          dir={-1}
+          label={t("layout.resizeRight")}
+          size={rightWidth}
+          onResize={setRightWidth}
         />
-        <span class="tf-composer-meta">
-          <Show
-            when={isBusy()}
-            fallback={<span>{mode() === "shell" ? t("input.shell") : t("input.agent")}</span>}
-          >
-            <button type="button" onClick={() => void bridge.agentCancel(props.sessionId)}>
-              {t("agent.stop")}
-            </button>
-          </Show>
-        </span>
-      </div>
+        <div class="tf-right-wrap" style={{ width: `${rightWidth()}px` }}>
+          <RightPanel todos={todos()} context={context()} />
+        </div>
+      </Show>
     </div>
   );
 }

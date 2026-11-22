@@ -1,4 +1,5 @@
 import { createMemo, createSignal, For, onMount, Show } from "solid-js";
+import { Icon } from "../../components/Icon";
 import { t } from "../../i18n";
 import { rank } from "./fuzzy";
 
@@ -6,6 +7,8 @@ export interface PaletteItem {
   id: string;
   label: string;
   hint?: string;
+  /** Section title; consecutive items with the same group share one header. */
+  group?: string;
   run: () => void;
 }
 
@@ -32,49 +35,59 @@ export function Palette(props: { items: PaletteItem[]; onClose: () => void }) {
         aria-label={t("palette.title")}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <input
-          ref={input}
-          value={q()}
-          placeholder={t("palette.placeholder")}
-          aria-label={t("palette.placeholder")}
-          aria-controls="tf-palette-list"
-          aria-activedescendant={`tf-pi-${sel()}`}
-          onInput={(e) => {
-            setQ(e.currentTarget.value);
-            setSel(0);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "ArrowDown") {
-              e.preventDefault();
-              setSel((s) => Math.min(s + 1, results().length - 1));
-            } else if (e.key === "ArrowUp") {
-              e.preventDefault();
-              setSel((s) => Math.max(s - 1, 0));
-            } else if (e.key === "Enter") {
-              run(results()[sel()]);
-            } else if (e.key === "Escape") {
-              props.onClose();
-            }
-          }}
-        />
+        <div class="tf-palette-search">
+          <Icon name="search" size={14} />
+          <input
+            ref={input}
+            value={q()}
+            placeholder={t("palette.placeholder")}
+            aria-label={t("palette.placeholder")}
+            aria-controls="tf-palette-list"
+            aria-activedescendant={`tf-pi-${sel()}`}
+            onInput={(e) => {
+              setQ(e.currentTarget.value);
+              setSel(0);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setSel((s) => Math.min(s + 1, results().length - 1));
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setSel((s) => Math.max(s - 1, 0));
+              } else if (e.key === "Enter") {
+                run(results()[sel()]);
+              } else if (e.key === "Escape") {
+                props.onClose();
+              }
+            }}
+          />
+        </div>
         <div id="tf-palette-list" role="listbox" class="tf-palette-list">
           <For each={results()}>
             {(item, i) => (
-              <div
-                id={`tf-pi-${i()}`}
-                role="option"
-                tabIndex={-1}
-                aria-selected={i() === sel()}
-                data-selected={i() === sel() ? "1" : "0"}
-                onMouseEnter={() => setSel(i())}
-                onClick={() => run(item)}
-                onKeyDown={(e) => e.key === "Enter" && run(item)}
-              >
-                <span>{item.label}</span>
-                <Show when={item.hint}>
-                  <kbd>{item.hint}</kbd>
+              <>
+                <Show when={item.group && item.group !== results()[i() - 1]?.group}>
+                  <div class="tf-palette-group" role="presentation">
+                    {item.group}
+                  </div>
                 </Show>
-              </div>
+                <div
+                  id={`tf-pi-${i()}`}
+                  role="option"
+                  tabIndex={-1}
+                  aria-selected={i() === sel()}
+                  data-selected={i() === sel() ? "1" : "0"}
+                  onMouseEnter={() => setSel(i())}
+                  onClick={() => run(item)}
+                  onKeyDown={(e) => e.key === "Enter" && run(item)}
+                >
+                  <span>{item.label}</span>
+                  <Show when={item.hint}>
+                    <kbd>{item.hint}</kbd>
+                  </Show>
+                </div>
+              </>
             )}
           </For>
           <Show when={results().length === 0}>

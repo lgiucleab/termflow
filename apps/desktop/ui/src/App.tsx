@@ -1,6 +1,8 @@
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import type { AgentCli, Bridge, Workspace as Project } from "./bridge";
 import { BridgeProvider } from "./bridge/context";
+import { Icon } from "./components/Icon";
+import { ResizeHandle } from "./components/ResizeHandle";
 import { ChatView, dispatchToolEvent } from "./features/chat/ChatView";
 import {
   allShells,
@@ -11,14 +13,24 @@ import {
 import { Sidebar } from "./features/chat/Sidebar";
 import { StartScreen } from "./features/chat/StartScreen";
 import { Palette, type PaletteItem } from "./features/palette/Palette";
-import { ProvidersDialog } from "./features/providers/ProvidersDialog";
+import { Settings } from "./features/settings/Settings";
 import { blockMarkdown } from "./features/terminal/markdown";
 import { startPerfMonitor } from "./features/terminal/perf";
-import { THEMES, themeById } from "./features/themes/themes";
+import { THEMES, type Theme, themeById } from "./features/themes/themes";
 import { t } from "./i18n";
 import { type Action, actionFor, isMac, shortcutLabel } from "./keybindings";
 import { attach } from "./stores/agent";
 import { dispatchAgentEvent } from "./stores/agentEvents";
+import {
+  rightOpen,
+  setRightOpen,
+  setSettingsPage,
+  setSidebarOpen,
+  setSidebarWidth,
+  settingsPage,
+  sidebarOpen,
+  sidebarWidth,
+} from "./stores/layout";
 import {
   activeChat,
   chats,
@@ -32,7 +44,6 @@ import {
   credentials,
   LAST_MODEL_KEY,
   type ModelChoice,
-  providersOpen,
   refreshCredentials,
   setProvidersOpen,
 } from "./stores/providers";
@@ -124,6 +135,15 @@ export function App(props: { bridge: Bridge }) {
       case "prevChat":
         selectChat(-1);
         break;
+      case "toggleSidebar":
+        setSidebarOpen(!sidebarOpen());
+        break;
+      case "toggleRight":
+        setRightOpen(!rightOpen());
+        break;
+      case "settings":
+        setSettingsPage(settingsPage() ? null : "appearance");
+        break;
     }
   };
 
@@ -134,19 +154,34 @@ export function App(props: { bridge: Bridge }) {
       ["attachLastBlock", t("actions.attachLastBlock")],
       ["nextChat", t("actions.nextChat")],
       ["prevChat", t("actions.prevChat")],
+      ["toggleSidebar", t("actions.toggleSidebar")],
+      ["toggleRight", t("actions.toggleRight")],
+      ["settings", t("actions.settings")],
     ];
     const items: PaletteItem[] = [
       ...actions.map(([a, label]) => ({
         id: a,
         label,
         hint: shortcutLabel(a, mac),
+        group: t("layout.commands"),
         run: () => run(a),
       })),
-      { id: "open-project", label: t("actions.openProject"), run: () => switchProject() },
-      { id: "providers", label: t("actions.providers"), run: () => setProvidersOpen(true) },
+      {
+        id: "open-project",
+        label: t("actions.openProject"),
+        group: t("layout.commands"),
+        run: () => switchProject(),
+      },
+      {
+        id: "providers",
+        label: t("actions.providers"),
+        group: t("layout.commands"),
+        run: () => setProvidersOpen(true),
+      },
       ...agents().map((a) => ({
         id: `cli:${a.id}`,
         label: t("actions.runExternalAgent", { name: a.name }),
+        group: t("layout.commands"),
         run: () => {
           const s = activeShell();
           if (!s?.run(a.id)) showToast(t("shell.notReady"));
@@ -156,14 +191,17 @@ export function App(props: { bridge: Bridge }) {
         id: `theme:${th.id}`,
         label: t("actions.theme", { name: th.name }),
         hint: th.id === theme().id ? "✓" : undefined,
-        run: () => {
-          setTheme(th);
-          for (const s of allShells()) s.applyTheme();
-          void bridge.settingSet(THEME_KEY, th.id);
-        },
+        group: t("settings.theme"),
+        run: () => pickTheme(th),
       })),
     ];
     setPaletteItems(items);
+  };
+
+  const pickTheme = (th: Theme) => {
+    setTheme(th);
+    for (const s of allShells()) s.applyTheme();
+    void bridge.settingSet(THEME_KEY, th.id);
   };
 
   const onKey = (e: KeyboardEvent) => {
@@ -207,20 +245,69 @@ export function App(props: { bridge: Bridge }) {
     setReady(true);
   });
 
-  const shellStatus = () => {
-    const st = activeShell()?.state[0]();
-    if (!st) return "";
-    return t(`shell.state.${st}`);
-  };
-
   return (
     <BridgeProvider bridge={bridge}>
       <div class="tf-app">
+        <header class="tf-titlebar" data-tauri-drag-region>
+          <Show when={project()}>
+            <button
+              type="button"
+              class="tf-icon-btn"
+              data-on={sidebarOpen() ? "1" : "0"}
+              aria-label={t("layout.toggleSidebar")}
+              aria-pressed={sidebarOpen()}
+              title={`${t("layout.toggleSidebar")} (${shortcutLabel("toggleSidebar", mac)})`}
+              onClick={() => setSidebarOpen(!sidebarOpen())}
+            >
+              <Icon name="sidebar" size={15} />
+            </button>
+            <button
+              type="button"
+              class="tf-titlebar-project"
+              title={`${project()?.path ?? ""} · ${t("start.switch")}`}
+              onClick={switchProject}
+            >
+              <Icon name="folder" size={13} />
+              {project()?.name}
+            </button>
+          </Show>
+          <span class="tf-spacer" data-tauri-drag-region />
+          <button
+            type="button"
+            class="tf-titlebar-search"
+            onClick={() => void openPalette()}
+            title={shortcutLabel("palette", mac)}
+          >
+            <Icon name="search" size={13} />
+            <span>{t("layout.commands")}</span>
+            <kbd>{shortcutLabel("palette", mac)}</kbd>
+          </button>
+          <button
+            type="button"
+            class="tf-icon-btn"
+            aria-label={t("layout.settings")}
+            title={`${t("layout.settings")} (${shortcutLabel("settings", mac)})`}
+            onClick={() => setSettingsPage("appearance")}
+          >
+            <Icon name="settings" size={15} />
+          </button>
+        </header>
         <Show when={ready()} fallback={<div class="tf-loading">{t("app.loading")}</div>}>
           <Show when={project()} fallback={<StartScreen onOpen={(w) => void openProject(w)} />}>
             <div class="tf-shell">
-              <Sidebar onNewChat={() => void newChat()} onSwitchProject={switchProject} />
-              <div class="tf-main">
+              <Show when={sidebarOpen()}>
+                <div class="tf-sidebar-wrap" style={{ width: `${sidebarWidth()}px` }}>
+                  <Sidebar onNewChat={() => void newChat()} />
+                </div>
+                <ResizeHandle
+                  axis="x"
+                  dir={1}
+                  label={t("layout.resizeSidebar")}
+                  size={sidebarWidth}
+                  onResize={setSidebarWidth}
+                />
+              </Show>
+              <main class="tf-main">
                 <Show when={activeChat()} keyed>
                   {(id) => (
                     <ChatView
@@ -230,30 +317,12 @@ export function App(props: { bridge: Bridge }) {
                     />
                   )}
                 </Show>
-              </div>
+              </main>
             </div>
           </Show>
         </Show>
-        <footer class="tf-status">
-          <span class="tf-status-cwd">{project()?.path ?? ""}</span>
-          <span class="tf-spacer" />
-          <span data-off={activeShell()?.state[0]() === "degraded" ? "1" : "0"}>
-            {shellStatus()}
-          </span>
-          <button type="button" class="tf-status-btn" onClick={() => setProvidersOpen(true)}>
-            {t("providers.title")}
-          </button>
-          <button
-            type="button"
-            class="tf-status-btn"
-            onClick={() => void openPalette()}
-            title={shortcutLabel("palette", mac)}
-          >
-            {t("palette.open")}
-          </button>
-        </footer>
-        <Show when={providersOpen()}>
-          <ProvidersDialog onClose={() => setProvidersOpen(false)} />
+        <Show when={settingsPage()}>
+          <Settings onTheme={pickTheme} />
         </Show>
         <Show when={paletteItems()}>
           {(items) => <Palette items={items()} onClose={() => setPaletteItems(null)} />}

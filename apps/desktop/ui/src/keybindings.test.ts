@@ -26,3 +26,13 @@ test("windows uses Ctrl+Shift so Ctrl+K/J/N reach the shell", () => {
   expect(actionFor(k("PageDown", { ctrl: true, shift: true }), false)).toBe("nextChat");
   expect(shortcutLabel("toggleTerminal", false)).toBe("Ctrl+Shift+J");
 });
+
+test("M2d panel shortcuts", () => {
+  expect(actionFor(k("B", { meta: true, shift: true }), true)).toBe("toggleSidebar");
+  expect(actionFor(k("R", { meta: true, shift: true }), true)).toBe("toggleRight");
+  expect(actionFor(k(",", { meta: true }), true)).toBe("settings");
+  expect(actionFor(k("P", { meta: true, shift: true }), true)).toBe("palette");
+  expect(actionFor(k("r", { meta: true }), true)).toBeNull(); // plain ⌘R stays free
+  expect(actionFor(k("B", { ctrl: true, shift: true }), false)).toBe("toggleSidebar");
+  expect(shortcutLabel("settings", true)).toBe("⌘,");
+});

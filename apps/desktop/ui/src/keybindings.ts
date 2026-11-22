@@ -7,7 +7,10 @@ export type Action =
   | "toggleTerminal"
   | "attachLastBlock"
   | "nextChat"
-  | "prevChat";
+  | "prevChat"
+  | "toggleSidebar"
+  | "toggleRight"
+  | "settings";
 
 export interface KeyLike {
   key: string;
@@ -23,6 +26,10 @@ export const isMac = (): boolean =>
 
 const MAC: Record<string, Action> = {
   k: "palette",
+  "shift+p": "palette",
+  "shift+b": "toggleSidebar",
+  "shift+r": "toggleRight",
+  ",": "settings",
   j: "toggleTerminal",
   "shift+n": "newChat",
   "shift+a": "attachLastBlock",
@@ -40,6 +47,10 @@ const OTHER: Record<string, Action> = {
   a: "attachLastBlock",
   pagedown: "nextChat",
   pageup: "prevChat",
+  b: "toggleSidebar",
+  r: "toggleRight",
+  ",": "settings",
+  "<": "settings",
 };
 
 export function actionFor(e: KeyLike, mac: boolean): Action | null {
@@ -60,7 +71,13 @@ const LABELS: Record<Action, [string, string]> = {
   attachLastBlock: ["⌘⇧A", "Ctrl+Shift+A"],
   nextChat: ["⌘⇧]", "Ctrl+Shift+PgDn"],
   prevChat: ["⌘⇧[", "Ctrl+Shift+PgUp"],
+  toggleSidebar: ["⌘⇧B", "Ctrl+Shift+B"],
+  toggleRight: ["⌘⇧R", "Ctrl+Shift+R"],
+  settings: ["⌘,", "Ctrl+Shift+,"],
 };
+
+/** Every app action, in the order Settings › Shortcuts lists them. */
+export const ACTIONS = Object.keys(LABELS) as Action[];
 
 /** Human label for menus/palette, e.g. "⌘⇧N" or "Ctrl+Shift+N". */
 export const shortcutLabel = (action: Action, mac: boolean): string => LABELS[action][mac ? 0 : 1];

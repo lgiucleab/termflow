@@ -2,16 +2,11 @@ import { createSignal, For, Show } from "solid-js";
 import { useBridge } from "../../bridge/context";
 import { Icon } from "../../components/Icon";
 import { t } from "../../i18n";
-import {
-  activeChat,
-  busy,
-  chats,
-  project,
-  refreshChats,
-  setActiveChat,
-} from "../../stores/project";
+import { isMac, shortcutLabel } from "../../keybindings";
+import { activeChat, busy, chats, refreshChats, setActiveChat } from "../../stores/project";
+import { ago } from "./time";
 
-export function Sidebar(props: { onNewChat: () => void; onSwitchProject: () => void }) {
+export function Sidebar(props: { onNewChat: () => void }) {
   const bridge = useBridge();
   const [editing, setEditing] = createSignal<string | null>(null);
   const [confirmDelete, setConfirmDelete] = createSignal<string | null>(null);
@@ -32,22 +27,18 @@ export function Sidebar(props: { onNewChat: () => void; onSwitchProject: () => v
 
   return (
     <nav class="tf-sidebar" aria-label={t("chats.label")}>
-      <div class="tf-sidebar-project">
-        <span class="tf-project-name" title={project()?.path}>
-          {project()?.name}
-        </span>
+      <div class="tf-sidebar-head">
+        <span>{t("chats.label")}</span>
         <button
           type="button"
           class="tf-icon-btn"
-          title={t("start.switch")}
-          onClick={props.onSwitchProject}
+          aria-label={t("chats.new")}
+          title={`${t("chats.new")} (${shortcutLabel("newChat", isMac())})`}
+          onClick={props.onNewChat}
         >
-          {t("start.switchShort")}
+          <Icon name="plus" size={14} />
         </button>
       </div>
-      <button type="button" class="tf-newchat" onClick={props.onNewChat}>
-        <Icon name="plus" size={12} /> {t("chats.new")}
-      </button>
       <ul class="tf-chatlist">
         <For each={chats()}>
           {(c) => (
@@ -62,14 +53,17 @@ export function Sidebar(props: { onNewChat: () => void; onSwitchProject: () => v
                     onDblClick={() => setEditing(c.id)}
                     title={t("tabs.renameHint")}
                   >
-                    <Show when={busy().has(c.id)}>
-                      <span class="tf-dot" title={t("chats.working")} />
-                      <span class="tf-sr">{t("chats.working")}</span>
-                    </Show>
-                    <span>{c.title ?? t("chats.untitled")}</span>
-                    <Show when={c.mode === "plan"}>
-                      <span class="tf-badge-plan">{t("agent.plan")}</span>
-                    </Show>
+                    <span class="tf-chat-title">
+                      <Show when={busy().has(c.id)}>
+                        <span class="tf-dot" title={t("chats.working")} />
+                        <span class="tf-sr">{t("chats.working")}</span>
+                      </Show>
+                      <span class="tf-ellipsis">{c.title ?? t("chats.untitled")}</span>
+                    </span>
+                    <span class="tf-chat-meta">
+                      {c.mode === "plan" ? t("agent.plan") : t("agent.build")}
+                      {c.model ? ` · ${c.model}` : ""} · {ago(c.updated_at)}
+                    </span>
                   </button>
                 }
               >
