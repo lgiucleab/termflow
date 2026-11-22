@@ -14,6 +14,8 @@ export interface WorkspaceProps {
   onFocusPane: (id: string) => void;
   onClosePane: (id: string) => void;
   onRatio: (tabId: string, path: Path, ratio: number) => void;
+  onAgentSession: (paneId: string, sessionId: string) => void;
+  onOpenProviders: () => void;
   onNewTab: () => void;
   onOpenPalette: () => void;
 }
@@ -142,7 +144,12 @@ function NodeView(props: {
           const pane = leaf().pane;
           const focused = () => props.tab.focused === pane.id;
           return pane.kind.type === "agent" ? (
-            <AgentTab focused={focused()} onFocus={() => props.p.onFocusPane(pane.id)} />
+            <AgentTab
+              pane={pane}
+              focused={focused()}
+              onFocus={() => props.p.onFocusPane(pane.id)}
+              onSession={props.p.onAgentSession}
+            />
           ) : (
             <TerminalPane
               pane={pane}
@@ -173,6 +180,9 @@ export function Workspace(props: WorkspaceProps) {
           <Icon name="plus" size={13} />
         </button>
         <span class="tf-spacer" />
+        <button type="button" class="tf-tab-palette" onClick={props.onOpenProviders}>
+          {t("providers.title")}
+        </button>
         <button type="button" class="tf-tab-palette" onClick={props.onOpenPalette}>
           {t("palette.open")}
         </button>

@@ -17,11 +17,13 @@ import {
   parseLayout,
   renameTab,
   selectTab,
+  setAgentSession,
   setRatio,
   splitFocused,
 } from "./features/layout/model";
 import { Workspace } from "./features/layout/Workspace";
 import { Palette, type PaletteItem } from "./features/palette/Palette";
+import { ProvidersDialog } from "./features/providers/ProvidersDialog";
 import { blockMarkdown } from "./features/terminal/markdown";
 import { startPerfMonitor } from "./features/terminal/perf";
 import {
@@ -34,6 +36,8 @@ import { THEMES, themeById } from "./features/themes/themes";
 import { t } from "./i18n";
 import { type Action, actionFor, isMac, shortcutLabel } from "./keybindings";
 import { attach } from "./stores/agent";
+import { dispatchAgentEvent } from "./stores/agentEvents";
+import { providersOpen, setProvidersOpen } from "./stores/providers";
 import { setConfig, setTheme, theme } from "./stores/settings";
 import { showToast, toast } from "./stores/toast";
 
@@ -143,6 +147,7 @@ export function App(props: { bridge: Bridge }) {
         label: t("actions.newExternalAgent", { name: a.name }),
         run: () => open({ type: "terminal", agentId: a.id }),
       })),
+      { id: "providers", label: t("actions.providers"), run: () => setProvidersOpen(true) },
       ...THEMES.map((th) => ({
         id: `theme:${th.id}`,
         label: t("actions.theme", { name: th.name }),
@@ -184,7 +189,9 @@ export function App(props: { bridge: Bridge }) {
     window.addEventListener("keydown", onKey, { capture: true });
     onCleanup(() => window.removeEventListener("keydown", onKey, { capture: true }));
     const unlisten = await bridge.onCoreEvent((ev) => {
-      routeEvent("block" in ev ? ev.block.terminal_id : ev.terminal_id, ev);
+      if (dispatchAgentEvent(ev)) return;
+      if ("block" in ev) routeEvent(ev.block.terminal_id, ev);
+      else if ("terminal_id" in ev) routeEvent(ev.terminal_id, ev);
     });
     onCleanup(unlisten);
 
@@ -229,6 +236,10 @@ export function App(props: { bridge: Bridge }) {
             }}
             onClosePane={(id) => setLayout(closePane(layout(), id))}
             onRatio={(tab, path, r) => setLayout(setRatio(layout(), tab, path, r))}
+            onAgentSession={(paneId, sessionId) =>
+              setLayout(setAgentSession(layout(), paneId, sessionId))
+            }
+            onOpenProviders={() => setProvidersOpen(true)}
             onNewTab={() => run("newTab")}
             onOpenPalette={() => void openPalette()}
           />
@@ -254,6 +265,9 @@ export function App(props: { bridge: Bridge }) {
             <span data-off={focusedController()?.degraded[0]() ? "1" : "0"}>{blocksStatus()}</span>
           </Show>
         </footer>
+        <Show when={providersOpen()}>
+          <ProvidersDialog onClose={() => setProvidersOpen(false)} />
+        </Show>
         <Show when={paletteItems()}>
           {(items) => <Palette items={items()} onClose={() => setPaletteItems(null)} />}
         </Show>

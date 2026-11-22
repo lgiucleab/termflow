@@ -1,6 +1,8 @@
 // Tab / split layout as an immutable tree. Pure functions only (unit tested).
 
-export type PaneKind = { type: "terminal"; shellId?: string; agentId?: string } | { type: "agent" };
+export type PaneKind =
+  | { type: "terminal"; shellId?: string; agentId?: string }
+  | { type: "agent"; sessionId?: string };
 
 export interface Pane {
   id: string;
@@ -156,6 +158,17 @@ export function selectTab(layout: Layout, delta: number): Layout {
   const i = layout.tabs.findIndex((t) => t.id === layout.active);
   const next = layout.tabs[(i + delta + layout.tabs.length) % layout.tabs.length];
   return next ? { ...layout, active: next.id } : layout;
+}
+
+/** Remember which agent session an agent pane shows (restored on restart). */
+export function setAgentSession(layout: Layout, paneId: string, sessionId: string): Layout {
+  const walk = (n: LayoutNode): LayoutNode =>
+    n.type === "split"
+      ? { ...n, a: walk(n.a), b: walk(n.b) }
+      : n.pane.id === paneId && n.pane.kind.type === "agent"
+        ? { type: "pane", pane: { ...n.pane, kind: { type: "agent", sessionId } } }
+        : n;
+  return { ...layout, tabs: layout.tabs.map((t) => ({ ...t, root: walk(t.root) })) };
 }
 
 export function renameTab(layout: Layout, tabId: string, title: string): Layout {
