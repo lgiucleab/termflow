@@ -1,9 +1,11 @@
 //! Agent sessions, the append-only transcript, credentials metadata and the attempt log.
 
 use rusqlite::{Connection, OptionalExtension, Row, params};
+use std::collections::HashMap;
+
 use termflow_types::{
-    AgentSession, AttemptId, Credential, ErrorClass, Part, ProviderKind, Role, ServedBy, SessionId, Turn, TurnId,
-    TurnStatus, Usage, WireFormat,
+    AgentSession, AttemptId, CallId, Credential, ErrorClass, Part, ProviderKind, Role, ServedBy, SessionId, Turn,
+    TurnId, TurnStatus, Usage, WireFormat, Workspace,
 };
 
 use crate::StoreError;
@@ -30,15 +32,31 @@ where
 pub fn create_session(
     conn: &Connection,
     id: SessionId,
+    workspace_id: Option<&str>,
     credential_id: Option<&str>,
     model: Option<&str>,
 ) -> Result<(), StoreError> {
     let now = jiff::Timestamp::now().to_string();
     conn.execute(
-        "INSERT INTO sessions (id, kind, status, credential_id, pinned_model, mode, created_at, updated_at)
-         VALUES (?1, 'agent', 'active', ?2, ?3, 'build', ?4, ?4)",
-        params![id.to_string(), credential_id, model, now],
+        "INSERT INTO sessions (id, workspace_id, kind, status, credential_id, pinned_model, mode, created_at, updated_at)
+         VALUES (?1, ?2, 'agent', 'active', ?3, ?4, 'build', ?5, ?5)",
+        params![id.to_string(), workspace_id, credential_id, model, now],
     )?;
+    Ok(())
+}
+
+pub fn set_session_mode(conn: &Connection, id: SessionId, mode: &str) -> Result<(), StoreError> {
+    conn.execute(
+        "UPDATE sessions SET mode = ?2 WHERE id = ?1",
+        params![id.to_string(), mode],
+    )?;
+    Ok(())
+}
+
+/// Delete a chat and its transcript (the user confirmed in the UI).
+pub fn delete_session(conn: &Connection, id: SessionId) -> Result<(), StoreError> {
+    conn.execute("DELETE FROM attempts WHERE session_id = ?1", [id.to_string()])?;
+    conn.execute("DELETE FROM sessions WHERE id = ?1", [id.to_string()])?;
     Ok(())
 }
 
@@ -81,10 +99,12 @@ fn session_row(r: &Row<'_>) -> rusqlite::Result<AgentSession> {
         model: r.get(3)?,
         reasoning: r.get(4)?,
         updated_at: parse(&r.get::<_, String>(5)?)?,
+        workspace_id: r.get(6)?,
+        mode: r.get::<_, Option<String>>(7)?.unwrap_or_else(|| "build".into()),
     })
 }
 
-const SESSION_COLS: &str = "id, title, credential_id, pinned_model, reasoning, updated_at";
+const SESSION_COLS: &str = "id, title, credential_id, pinned_model, reasoning, updated_at, workspace_id, mode";
 
 pub fn get_session(conn: &Connection, id: SessionId) -> Result<Option<AgentSession>, StoreError> {
     Ok(conn
@@ -96,11 +116,12 @@ pub fn get_session(conn: &Connection, id: SessionId) -> Result<Option<AgentSessi
         .optional()?)
 }
 
-pub fn list_sessions(conn: &Connection) -> Result<Vec<AgentSession>, StoreError> {
+/// Agent chats, newest first; only one project's when `workspace_id` is given.
+pub fn list_sessions(conn: &Connection, workspace_id: Option<&str>) -> Result<Vec<AgentSession>, StoreError> {
     let mut stmt = conn.prepare(&format!(
-        "SELECT {SESSION_COLS} FROM sessions WHERE kind = 'agent' ORDER BY updated_at DESC"
+        "SELECT {SESSION_COLS} FROM sessions WHERE kind = 'agent' AND (?1 IS NULL OR workspace_id = ?1) ORDER BY updated_at DESC"
     ))?;
-    Ok(stmt.query_map([], session_row)?.collect::<Result<_, _>>()?)
+    Ok(stmt.query_map([workspace_id], session_row)?.collect::<Result<_, _>>()?)
 }
 
 // ---- transcript ----
@@ -275,6 +296,143 @@ pub fn delete_credential(conn: &Connection, id: &str) -> Result<(), StoreError> 
     Ok(())
 }
 
+// ---- projects ----
+
+fn workspace_row(r: &Row<'_>) -> rusqlite::Result<Workspace> {
+    let path: String = r.get(1)?;
+    let name = std::path::Path::new(&path)
+        .file_name()
+        .map_or_else(|| path.clone(), |n| n.to_string_lossy().into_owned());
+    let last: Option<String> = r.get(2)?;
+    Ok(Workspace {
+        id: r.get(0)?,
+        path,
+        name,
+        last_opened: last.as_deref().map(parse).transpose()?,
+    })
+}
+
+/// Record that `path` was opened now; returns its workspace row (created on first open).
+pub fn open_workspace(conn: &Connection, path: &str) -> Result<Workspace, StoreError> {
+    let now = jiff::Timestamp::now().to_string();
+    conn.execute(
+        "INSERT INTO workspaces (id, path, trusted, created_at, last_opened) VALUES (?1, ?2, 0, ?3, ?3)
+         ON CONFLICT(path) DO UPDATE SET last_opened = excluded.last_opened",
+        params![ulid::Ulid::new().to_string(), path, now],
+    )?;
+    Ok(conn.query_row(
+        "SELECT id, path, last_opened FROM workspaces WHERE path = ?1",
+        [path],
+        workspace_row,
+    )?)
+}
+
+pub fn get_workspace(conn: &Connection, id: &str) -> Result<Option<Workspace>, StoreError> {
+    Ok(conn
+        .query_row(
+            "SELECT id, path, last_opened FROM workspaces WHERE id = ?1",
+            [id],
+            workspace_row,
+        )
+        .optional()?)
+}
+
+pub fn recent_workspaces(conn: &Connection, limit: u32) -> Result<Vec<Workspace>, StoreError> {
+    let mut stmt = conn.prepare(
+        "SELECT id, path, last_opened FROM workspaces WHERE last_opened IS NOT NULL ORDER BY last_opened DESC LIMIT ?1",
+    )?;
+    Ok(stmt.query_map([limit], workspace_row)?.collect::<Result<_, _>>()?)
+}
+
+pub fn forget_workspace(conn: &Connection, id: &str) -> Result<(), StoreError> {
+    conn.execute("UPDATE workspaces SET last_opened = NULL WHERE id = ?1", [id])?;
+    Ok(())
+}
+
+// ---- tool calls: execution guard and native id map (BUILD_PROMPT §7.1, §7.7) ----
+
+/// Register the tool calls of a committed assistant turn, with each provider-native id.
+pub fn insert_tool_calls(
+    conn: &mut Connection,
+    session: SessionId,
+    turn: TurnId,
+    provider: &str,
+    calls: &[(CallId, String, String, serde_json::Value)],
+) -> Result<(), StoreError> {
+    let tx = conn.transaction()?;
+    for (call, native, name, args) in calls {
+        tx.execute(
+            "INSERT OR IGNORE INTO tool_calls (call_id, session_id, turn_id, name, args_json, status) VALUES (?1, ?2, ?3, ?4, ?5, 'pending')",
+            params![call.to_string(), session.to_string(), turn.to_string(), name, args.to_string()],
+        )?;
+        tx.execute(
+            "INSERT OR REPLACE INTO id_map (call_id, provider, native_id) VALUES (?1, ?2, ?3)",
+            params![call.to_string(), provider, native],
+        )?;
+    }
+    tx.commit()?;
+    Ok(())
+}
+
+/// Mark a call as executing and bump its counter. Returns the new count (1 = first run).
+pub fn begin_tool_exec(conn: &Connection, call: CallId) -> Result<i64, StoreError> {
+    conn.execute(
+        "UPDATE tool_calls SET exec_count = exec_count + 1, status = 'running', started_at = ?2 WHERE call_id = ?1",
+        params![call.to_string(), jiff::Timestamp::now().to_string()],
+    )?;
+    Ok(conn.query_row(
+        "SELECT exec_count FROM tool_calls WHERE call_id = ?1",
+        [call.to_string()],
+        |r| r.get(0),
+    )?)
+}
+
+pub fn finish_tool(conn: &Connection, call: CallId, status: &str, full: &str) -> Result<(), StoreError> {
+    conn.execute(
+        "UPDATE tool_calls SET status = ?2, finished_at = ?3, result_full = ?4 WHERE call_id = ?1",
+        params![call.to_string(), status, jiff::Timestamp::now().to_string(), full],
+    )?;
+    Ok(())
+}
+
+pub fn exec_count(conn: &Connection, call: CallId) -> Result<i64, StoreError> {
+    Ok(conn
+        .query_row(
+            "SELECT exec_count FROM tool_calls WHERE call_id = ?1",
+            [call.to_string()],
+            |r| r.get(0),
+        )
+        .optional()?
+        .unwrap_or(0))
+}
+
+/// Native tool-call ids issued by `provider` in a session (used when re-rendering for it).
+pub fn native_ids(
+    conn: &Connection,
+    session: SessionId,
+    provider: &str,
+) -> Result<HashMap<CallId, String>, StoreError> {
+    let mut stmt = conn.prepare(
+        "SELECT m.call_id, m.native_id FROM id_map m JOIN tool_calls c ON c.call_id = m.call_id
+         WHERE c.session_id = ?1 AND m.provider = ?2",
+    )?;
+    let rows = stmt.query_map(params![session.to_string(), provider], |r| {
+        Ok((CallId(parse(&r.get::<_, String>(0)?)?), r.get::<_, String>(1)?))
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// Sum of tokens over a session's attempts: (input, output, cache_read, cache_write, reasoning, requests).
+pub fn session_usage(conn: &Connection, session: SessionId) -> Result<(i64, i64, i64, i64, i64, i64), StoreError> {
+    Ok(conn.query_row(
+        "SELECT COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(cache_read_tokens),0),
+                COALESCE(SUM(cache_write_tokens),0), COALESCE(SUM(reasoning_tokens),0), COUNT(*)
+         FROM attempts WHERE session_id = ?1",
+        [session.to_string()],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+    )?)
+}
+
 // ---- attempt log (`BUILD_PROMPT` §7.7) ----
 
 pub struct AttemptStart<'a> {
@@ -360,7 +518,7 @@ mod tests {
         let (u2, a2) = (user.clone(), asst.clone());
         store
             .write(move |c| {
-                create_session(c, sid, None, None)?;
+                create_session(c, sid, None, None, None)?;
                 append_turn(c, &u2)?;
                 append_turn(c, &a2)
             })
@@ -431,6 +589,53 @@ mod tests {
         assert!(
             !cols.iter().any(|c| c.contains("secret") && c != "has_secret"),
             "{cols:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn projects_and_tool_exec_guard() {
+        let (_d, store) = store();
+        let w1 = store.write(|c| open_workspace(c, "/work/a")).await.unwrap();
+        let again = store.write(|c| open_workspace(c, "/work/a")).await.unwrap();
+        assert_eq!(w1.id, again.id);
+        assert_eq!(w1.name, "a");
+        store.write(|c| open_workspace(c, "/work/b")).await.unwrap();
+        let recent = recent_workspaces(&store.reader().unwrap(), 10).unwrap();
+        assert_eq!(recent.len(), 2);
+
+        let sid = SessionId::new();
+        let wid = w1.id.clone();
+        let turn = Turn::new(sid, Role::Assistant, vec![], TurnStatus::Committed);
+        let tid = turn.id;
+        let call = CallId::new();
+        store
+            .write(move |c| {
+                create_session(c, sid, Some(&wid), None, None)?;
+                append_turn(c, &turn)?;
+                insert_tool_calls(
+                    c,
+                    sid,
+                    tid,
+                    "anthropic",
+                    &[(call, "toolu_1".into(), "read".into(), serde_json::json!({}))],
+                )
+            })
+            .await
+            .unwrap();
+        let r = store.reader().unwrap();
+        assert_eq!(list_sessions(&r, Some(&w1.id)).unwrap().len(), 1);
+        assert_eq!(list_sessions(&r, Some("other")).unwrap().len(), 0);
+        assert_eq!(
+            native_ids(&r, sid, "anthropic").unwrap().get(&call).map(String::as_str),
+            Some("toolu_1")
+        );
+        assert!(native_ids(&r, sid, "openai").unwrap().is_empty());
+        assert_eq!(exec_count(&r, call).unwrap(), 0);
+        assert_eq!(store.write(move |c| begin_tool_exec(c, call)).await.unwrap(), 1);
+        store.write(move |c| set_session_mode(c, sid, "plan")).await.unwrap();
+        assert_eq!(
+            get_session(&store.reader().unwrap(), sid).unwrap().unwrap().mode,
+            "plan"
         );
     }
 }

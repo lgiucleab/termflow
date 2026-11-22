@@ -35,6 +35,7 @@ fn ctx(family: &str, scope: &str) -> RenderContext {
             description: "Read a file".into(),
             parameters: json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}),
         }],
+        native_ids: std::collections::HashMap::new(),
     }
 }
 
@@ -96,6 +97,16 @@ fn transcript() -> Vec<Turn> {
 #[test]
 fn anthropic_render_same_scope_keeps_thinking() {
     insta::assert_json_snapshot!(anthropic::render(&transcript(), &ctx("anthropic", "cred-a")));
+}
+
+#[test]
+fn native_ids_are_used_for_the_issuing_provider() {
+    let mut c = ctx("anthropic", "cred-a");
+    let call = CallId(ulid::Ulid::from_parts(0, 42));
+    c.native_ids.insert(call, "toolu_native".into());
+    let body = anthropic::render(&transcript(), &c);
+    assert_eq!(body["messages"][1]["content"][2]["id"], "toolu_native");
+    assert_eq!(body["messages"][2]["content"][0]["tool_use_id"], "toolu_native");
 }
 
 #[test]

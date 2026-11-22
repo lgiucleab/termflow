@@ -1,6 +1,6 @@
 [package]
 name = "termflow-agent"
-description = "Agent loop, build/plan modes, compaction, system prompts (M2a: streaming chat)."
+description = "Agent loop, build/plan modes, system prompts, tool execution with approvals."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -15,11 +15,16 @@ workspace = true
 termflow-types.workspace = true
 termflow-router.workspace = true
 termflow-store.workspace = true
+termflow-tools.workspace = true
+termflow-perms.workspace = true
+termflow-context.workspace = true
+termflow-providers.workspace = true
 futures.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]

@@ -78,6 +78,19 @@ pub enum AppEvent {
         class: String,
         message: String,
     },
+    /// A tool call is waiting for the user's decision.
+    ToolApprovalNeeded {
+        session_id: SessionId,
+        call_id: CallId,
+        tool: String,
+        summary: String,
+        /// Diff or command shown on the approval card.
+        preview: Option<String>,
+    },
+    /// A tool call started executing.
+    ToolRunning { session_id: SessionId, call_id: CallId },
+    /// The agent loop finished (final answer, error, cancel, or step limit).
+    AgentIdle { session_id: SessionId },
 }
 
 /// Request/response format a provider speaks.
@@ -150,11 +163,25 @@ pub struct ModelInfo {
     pub context_window: Option<u32>,
 }
 
+/// A project folder the user opened.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct Workspace {
+    pub id: String,
+    pub path: String,
+    pub name: String,
+    #[cfg_attr(feature = "specta", specta(type = Option<String>))]
+    pub last_opened: Option<Timestamp>,
+}
+
 /// An agent chat session as listed in the UI.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct AgentSession {
     pub id: SessionId,
+    pub workspace_id: Option<String>,
+    /// `build` or `plan`.
+    pub mode: String,
     pub title: Option<String>,
     pub credential_id: Option<String>,
     pub model: Option<String>,

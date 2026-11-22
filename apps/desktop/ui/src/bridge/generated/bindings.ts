@@ -29,13 +29,25 @@ export const commands = {
 	credentialDelete: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("credential_delete", { id }, options),
 	/**  Lists models; doubles as the connection test (errors come back classified). */
 	modelsList: (credentialId: string, options?: InvokeOptions) => __TAURI_INVOKE<ModelInfo_Serialize[]>("models_list", { credentialId }, options),
-	agentSessions: (options?: InvokeOptions) => __TAURI_INVOKE<AgentSession_Serialize[]>("agent_sessions", undefined, options),
+	agentSessions: (workspaceId: string | null, options?: InvokeOptions) => __TAURI_INVOKE<AgentSession_Serialize[]>("agent_sessions", { workspaceId }, options),
 	agentSession: (id: SessionId, options?: InvokeOptions) => __TAURI_INVOKE<AgentSession_Serialize>("agent_session", { id }, options),
-	agentSessionCreate: (credentialId: string | null, model: string | null, options?: InvokeOptions) => __TAURI_INVOKE<AgentSession_Serialize>("agent_session_create", { credentialId, model }, options),
+	agentSessionCreate: (workspaceId: string | null, credentialId: string | null, model: string | null, options?: InvokeOptions) => __TAURI_INVOKE<AgentSession_Serialize>("agent_session_create", { workspaceId, credentialId, model }, options),
 	agentSetModel: (id: SessionId, credentialId: string, model: string, reasoning: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("agent_set_model", { id, credentialId, model, reasoning }, options),
 	agentTranscript: (id: SessionId, options?: InvokeOptions) => __TAURI_INVOKE<Turn_Serialize[]>("agent_transcript", { id }, options),
 	agentSend: (id: SessionId, text: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("agent_send", { id, text }, options),
 	agentCancel: (id: SessionId, options?: InvokeOptions) => __TAURI_INVOKE<void>("agent_cancel", { id }, options),
+	agentSetMode: (id: SessionId, plan: boolean, options?: InvokeOptions) => __TAURI_INVOKE<null>("agent_set_mode", { id, plan }, options),
+	agentRename: (id: SessionId, title: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("agent_rename", { id, title }, options),
+	agentDelete: (id: SessionId, options?: InvokeOptions) => __TAURI_INVOKE<null>("agent_delete", { id }, options),
+	agentInit: (id: SessionId, options?: InvokeOptions) => __TAURI_INVOKE<null>("agent_init", { id }, options),
+	/**  Answer an approval card. Returns false if the call was no longer waiting. */
+	agentApprove: (callId: CallId, kind: ApprovalKind, feedback: string | null, options?: InvokeOptions) => __TAURI_INVOKE<boolean>("agent_approve", { callId, kind, feedback }, options),
+	agentUsage: (id: SessionId, options?: InvokeOptions) => __TAURI_INVOKE<SessionUsage>("agent_usage", { id }, options),
+	workspacesRecent: (options?: InvokeOptions) => __TAURI_INVOKE<Workspace_Serialize[]>("workspaces_recent", undefined, options),
+	workspaceOpen: (path: string, options?: InvokeOptions) => __TAURI_INVOKE<Workspace_Serialize>("workspace_open", { path }, options),
+	workspaceForget: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("workspace_forget", { id }, options),
+	workspaceGet: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<Workspace_Serialize | null>("workspace_get", { id }, options),
+	projectFiles: (workspaceId: string, options?: InvokeOptions) => __TAURI_INVOKE<string[]>("project_files", { workspaceId }, options),
 };
 
 /** Events */
@@ -77,6 +89,9 @@ export type AgentSession = AgentSession_Serialize | AgentSession_Deserialize;
 /**  An agent chat session as listed in the UI. */
 export type AgentSession_Deserialize = {
 	id: SessionId,
+	workspace_id?: string | null,
+	/**  `build` or `plan`. */
+	mode: string,
 	title?: string | null,
 	credential_id?: string | null,
 	model?: string | null,
@@ -87,6 +102,9 @@ export type AgentSession_Deserialize = {
 /**  An agent chat session as listed in the UI. */
 export type AgentSession_Serialize = {
 	id: SessionId,
+	workspace_id: string | null,
+	/**  `build` or `plan`. */
+	mode: string,
 	title: string | null,
 	credential_id: string | null,
 	model: string | null,
@@ -114,7 +132,15 @@ export type AppEvent_Deserialize =
 /**  A turn was committed to the transcript (persisted before this event is sent). */
 { type: "agent_turn_committed"; turn: Turn_Deserialize } | 
 /**  The request failed; the partial turn was discarded. */
-{ type: "agent_error"; session_id: SessionId; turn_id?: TurnId | null; class: string; message: string };
+{ type: "agent_error"; session_id: SessionId; turn_id?: TurnId | null; class: string; message: string } | 
+/**  A tool call is waiting for the user's decision. */
+{ type: "tool_approval_needed"; session_id: SessionId; call_id: CallId; tool: string; summary: string; 
+/**  Diff or command shown on the approval card. */
+preview?: string | null } | 
+/**  A tool call started executing. */
+{ type: "tool_running"; session_id: SessionId; call_id: CallId } | 
+/**  The agent loop finished (final answer, error, cancel, or step limit). */
+{ type: "agent_idle"; session_id: SessionId };
 
 /**  Events published on the core event bus; the UI subscribes to them. */
 export type AppEvent_Serialize = 
@@ -133,13 +159,23 @@ export type AppEvent_Serialize =
 /**  A turn was committed to the transcript (persisted before this event is sent). */
 { type: "agent_turn_committed"; turn: Turn_Serialize } | 
 /**  The request failed; the partial turn was discarded. */
-{ type: "agent_error"; session_id: SessionId; turn_id: TurnId | null; class: string; message: string };
+{ type: "agent_error"; session_id: SessionId; turn_id: TurnId | null; class: string; message: string } | 
+/**  A tool call is waiting for the user's decision. */
+{ type: "tool_approval_needed"; session_id: SessionId; call_id: CallId; tool: string; summary: string; 
+/**  Diff or command shown on the approval card. */
+preview: string | null } | 
+/**  A tool call started executing. */
+{ type: "tool_running"; session_id: SessionId; call_id: CallId } | 
+/**  The agent loop finished (final answer, error, cancel, or step limit). */
+{ type: "agent_idle"; session_id: SessionId };
 
 /**  Basic information about the running app, shown in the UI. */
 export type AppInfo = {
 	name: string,
 	version: string,
 };
+
+export type ApprovalKind = "allow_once" | "allow_session" | "deny";
 
 export type AttemptId = string;
 
@@ -313,6 +349,15 @@ export type ServedBy_Serialize = {
 
 export type SessionId = string;
 
+export type SessionUsage = {
+	input: number | null,
+	output: number | null,
+	cache_read: number | null,
+	cache_write: number | null,
+	reasoning: number | null,
+	requests: number | null,
+};
+
 /**  Which family a shell belongs to; decides how shell integration is injected. */
 export type ShellKind = "zsh" | "bash" | "fish" | "nu" | "pwsh" | "power_shell" | "cmd" | "wsl" | "other";
 
@@ -424,6 +469,25 @@ export type Value = null | boolean | number | string | Value[] | { [key in strin
 
 /**  Request/response format a provider speaks. */
 export type WireFormat = "anthropic_messages" | "openai_responses" | "openai_chat" | "ollama";
+
+/**  A project folder the user opened. */
+export type Workspace = Workspace_Serialize | Workspace_Deserialize;
+
+/**  A project folder the user opened. */
+export type Workspace_Deserialize = {
+	id: string,
+	path: string,
+	name: string,
+	last_opened?: string | null,
+};
+
+/**  A project folder the user opened. */
+export type Workspace_Serialize = {
+	id: string,
+	path: string,
+	name: string,
+	last_opened: string | null,
+};
 
 /* Tauri Specta runtime */
 type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;

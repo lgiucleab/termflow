@@ -1,6 +1,6 @@
 [package]
 name = "termflow-tools"
-description = "Built-in agent tools (read, write, edit, apply_patch, bash, grep, ...)."
+description = "Built-in agent tools (read, write, edit, apply_patch, bash, grep, glob, ls, todo, attach_block, webfetch)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,3 +12,24 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+termflow-types.workspace = true
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["process", "io-util", "fs"] }
+tokio-util.workspace = true
+tracing.workspace = true
+ignore.workspace = true
+grep-searcher.workspace = true
+grep-regex.workspace = true
+grep-matcher.workspace = true
+globset.workspace = true
+similar.workspace = true
+htmd.workspace = true
+reqwest.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+proptest.workspace = true
+tokio = { workspace = true }

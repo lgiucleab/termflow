@@ -34,7 +34,7 @@ pub fn render(transcript: &[Turn], ctx: &RenderContext, openrouter: bool) -> Val
                     .iter()
                     .filter_map(|p| match p {
                         Part::ToolCall { call_id, name, args } => Some(json!({
-                            "id":call_id.to_string(),"type":"function","function":{"name":name,"arguments":args.to_string()}
+                            "id":ctx.call_id(*call_id),"type":"function","function":{"name":name,"arguments":args.to_string()}
                         })),
                         _ => None,
                     })
@@ -60,7 +60,7 @@ pub fn render(transcript: &[Turn], ctx: &RenderContext, openrouter: bool) -> Val
                     match p {
                         Part::Text { text } if !text.is_empty() => messages.push(json!({"role":"user","content":text})),
                         Part::ToolResult { call_id, content, .. } => messages.push(json!({
-                            "role":"tool","tool_call_id":call_id.to_string(),"content":text_of(content)
+                            "role":"tool","tool_call_id":ctx.call_id(*call_id),"content":text_of(content)
                         })),
                         _ => {}
                     }

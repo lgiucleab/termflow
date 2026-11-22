@@ -66,9 +66,16 @@ pub struct RenderContext {
     /// Account the reasoning is bound to (we use the credential id).
     pub credential_scope: String,
     pub tools: Vec<ToolSpec>,
+    /// Provider-native ids for tool calls this provider issued (others use our `CallId`).
+    pub native_ids: std::collections::HashMap<termflow_types::CallId, String>,
 }
 
 impl RenderContext {
+    /// The id to send for a tool call: the provider's own if it issued it, else ours.
+    pub fn call_id(&self, id: termflow_types::CallId) -> String {
+        self.native_ids.get(&id).cloned().unwrap_or_else(|| id.to_string())
+    }
+
     /// Native reasoning is re-sent only to the same family and credential scope (§7.1).
     pub fn may_resend(&self, p: &Part) -> bool {
         matches!(p, Part::Reasoning { family, credential_scope, .. }

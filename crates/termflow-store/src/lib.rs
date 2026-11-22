@@ -16,6 +16,7 @@ static MIGRATIONS: LazyLock<Migrations<'static>> = LazyLock::new(|| {
         M::up(include_str!("../migrations/0001_init.sql")),
         M::up(include_str!("../migrations/0002_blocks_seq.sql")),
         M::up(include_str!("../migrations/0003_credentials.sql")),
+        M::up(include_str!("../migrations/0004_projects_tools.sql")),
     ])
 });
 

@@ -141,6 +141,8 @@ impl Router {
             family: family.clone(),
             credential_scope: cred.id.clone(),
             tools: req.tools,
+            native_ids: termflow_store::agent::native_ids(&self.store.reader()?, req.session, &cred.id)
+                .unwrap_or_default(),
         };
         let body = adapter.render(&req.transcript, &ctx)?;
 

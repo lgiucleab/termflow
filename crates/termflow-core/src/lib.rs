@@ -6,13 +6,13 @@ use std::path::{Path, PathBuf};
 
 use std::sync::Arc;
 
-use termflow_agent::Chat;
+use termflow_agent::{Chat, ChatOptions};
 use termflow_config::Config;
 use termflow_router::Router;
 use termflow_secrets::{Redactor, SecretStore, Secrets};
 use termflow_store::Store;
 use termflow_terminal::TerminalManager;
-use termflow_types::{AppEvent, AppInfo, Credential, ProviderKind, WireFormat};
+use termflow_types::{AppEvent, AppInfo, Credential, ProviderKind, WireFormat, Workspace};
 use tokio::sync::broadcast;
 
 pub use termflow_types as types;
@@ -105,7 +105,28 @@ impl App {
         )?;
         tracing::info!(data_dir = %paths.data_dir.display(), "core started");
         let router = Arc::new(Router::new(store.clone(), secrets.clone()));
-        let chat = Chat::new(store.clone(), router, bus.clone());
+        let mut rules = termflow_perms::default_rules();
+        rules.extend(config.permissions.iter().cloned());
+        let blocks_store = store.clone();
+        let blocks: termflow_tools::BlockLookup = Arc::new(move |id| {
+            let r = blocks_store.reader().ok()?;
+            let id = match id {
+                Some(id) => id,
+                None => termflow_store::blocks::recent(&r, 1).ok()?.into_iter().next()?.id,
+            };
+            termflow_store::blocks::get(&r, id).ok()?
+        });
+        let chat = Chat::new(
+            store.clone(),
+            router,
+            bus.clone(),
+            ChatOptions {
+                rules,
+                global_dir: Some(paths.global_config_dir.clone()),
+                blocks: Some(blocks),
+                shell: None,
+            },
+        );
         Ok(Self {
             config,
             store,
@@ -195,6 +216,44 @@ impl App {
             return Err(e.into());
         }
         Ok(cred)
+    }
+
+    pub fn recent_workspaces(&self) -> Result<Vec<Workspace>, CoreError> {
+        Ok(termflow_store::agent::recent_workspaces(&self.store.reader()?, 20)?)
+    }
+
+    /// Open (or re-open) a project folder; it must exist.
+    pub async fn open_workspace(&self, path: String) -> Result<Workspace, CoreError> {
+        let canon = std::path::Path::new(&path)
+            .canonicalize()
+            .map_err(|e| CoreError::Invalid(format!("cannot open {path}: {e}")))?;
+        if !canon.is_dir() {
+            return Err(CoreError::Invalid(format!("{path} is not a folder")));
+        }
+        let p = canon.display().to_string();
+        Ok(self
+            .store
+            .write(move |c| termflow_store::agent::open_workspace(c, &p))
+            .await?)
+    }
+
+    pub async fn forget_workspace(&self, id: String) -> Result<(), CoreError> {
+        Ok(self
+            .store
+            .write(move |c| termflow_store::agent::forget_workspace(c, &id))
+            .await?)
+    }
+
+    pub fn workspace(&self, id: &str) -> Result<Option<Workspace>, CoreError> {
+        Ok(termflow_store::agent::get_workspace(&self.store.reader()?, id)?)
+    }
+
+    /// Files for the `@` picker.
+    pub fn project_files(&self, workspace_id: &str) -> Result<Vec<String>, CoreError> {
+        let w = self
+            .workspace(workspace_id)?
+            .ok_or_else(|| CoreError::Invalid("unknown project".into()))?;
+        Ok(termflow_context::project_files(std::path::Path::new(&w.path), 5000))
     }
 
     pub async fn delete_credential(&self, id: String) -> Result<(), CoreError> {

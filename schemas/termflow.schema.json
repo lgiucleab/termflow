@@ -3,6 +3,14 @@
   "title": "Config",
   "type": "object",
   "properties": {
+    "permissions": {
+      "description": "Extra `[[permissions]]` rules, applied after the built-in defaults (last match wins).",
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Rule"
+      }
+    },
     "terminal": {
       "$ref": "#/$defs/TerminalConfig",
       "default": {
@@ -32,6 +40,56 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "Effect": {
+      "type": "string",
+      "enum": [
+        "allow",
+        "ask",
+        "deny"
+      ]
+    },
+    "Rule": {
+      "description": "One `[[permissions]]` entry. Unset matchers match anything.",
+      "type": "object",
+      "properties": {
+        "command": {
+          "description": "Bash command globs (`\"git status*\"`). For allow: every `;`/`&&`/`|` segment must match.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "effect": {
+          "$ref": "#/$defs/Effect"
+        },
+        "path": {
+          "description": "Path globs, matched against the absolute path (`\"**/.env*\"`).",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "path_outside_workspace": {
+          "description": "Matches when any path is outside the project folder.",
+          "type": "boolean",
+          "default": false
+        },
+        "tool": {
+          "description": "Tool name(s) or globs (`\"*\"`, `\"write\"`, `[\"write\",\"edit\"]`).",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "effect"
+      ]
+    },
     "TerminalConfig": {
       "type": "object",
       "properties": {

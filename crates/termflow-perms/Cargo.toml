@@ -12,3 +12,13 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+termflow-tools.workspace = true
+serde.workspace = true
+schemars.workspace = true
+globset.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+toml.workspace = true
+proptest.workspace = true
+tempfile.workspace = true

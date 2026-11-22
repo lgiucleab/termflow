@@ -24,6 +24,9 @@ termflow-terminal = { path = "crates/termflow-terminal" }
 termflow-providers = { path = "crates/termflow-providers" }
 termflow-router = { path = "crates/termflow-router" }
 termflow-agent = { path = "crates/termflow-agent" }
+termflow-tools = { path = "crates/termflow-tools" }
+termflow-perms = { path = "crates/termflow-perms" }
+termflow-context = { path = "crates/termflow-context" }
 mock-provider = { path = "tests/mock-provider" }
 
 # external
@@ -58,6 +61,13 @@ keyring = "4.2"
 axum = "0.8"
 insta = { version = "1", features = ["json"] }
 tokio-stream = "0.1"
+ignore = "0.4"
+grep-searcher = "0.1"
+grep-regex = "0.1"
+grep-matcher = "0.1"
+globset = "0.4"
+similar = "3"
+htmd = "0.6"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

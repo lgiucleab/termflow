@@ -1,6 +1,6 @@
 [package]
 name = "termflow-context"
-description = "AGENTS.md/CLAUDE.md discovery, skills, @-mentions, ignore rules."
+description = "AGENTS.md/CLAUDE.md discovery, environment summary, @-mention expansion."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,3 +12,11 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+serde.workspace = true
+jiff.workspace = true
+tokio = { workspace = true, features = ["process", "fs"] }
+ignore.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true }

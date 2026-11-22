@@ -9,8 +9,8 @@ use termflow_config::Config;
 use termflow_core::{App, NewCredential, Paths};
 use termflow_terminal::OpenOptions;
 use termflow_types::{
-    AgentCli, AgentSession, AppEvent, AppInfo, Block, BlockId, Credential, ModelInfo, ProviderKind, SessionId,
-    ShellSpec, TerminalId, Turn, WireFormat,
+    AgentCli, AgentSession, AppEvent, AppInfo, Block, BlockId, CallId, Credential, ModelInfo, ProviderKind, SessionId,
+    ShellSpec, TerminalId, Turn, WireFormat, Workspace,
 };
 
 /// Path of the generated bridge, relative to this crate.
@@ -230,8 +230,8 @@ async fn models_list(credential_id: String, state: tauri::State<'_, State>) -> R
 
 #[tauri::command]
 #[specta::specta]
-fn agent_sessions(state: tauri::State<'_, State>) -> Res<Vec<AgentSession>> {
-    state.core.chat().sessions().map_err(err)
+fn agent_sessions(workspace_id: Option<String>, state: tauri::State<'_, State>) -> Res<Vec<AgentSession>> {
+    state.core.chat().sessions(workspace_id.as_deref()).map_err(err)
 }
 
 #[tauri::command]
@@ -243,6 +243,7 @@ fn agent_session(id: SessionId, state: tauri::State<'_, State>) -> Res<AgentSess
 #[tauri::command]
 #[specta::specta]
 async fn agent_session_create(
+    workspace_id: Option<String>,
     credential_id: Option<String>,
     model: Option<String>,
     state: tauri::State<'_, State>,
@@ -250,7 +251,7 @@ async fn agent_session_create(
     state
         .core
         .chat()
-        .create_session(credential_id, model)
+        .create_session(workspace_id, credential_id, model)
         .await
         .map_err(err)
 }
@@ -290,6 +291,115 @@ fn agent_cancel(id: SessionId, state: tauri::State<'_, State>) {
     state.core.chat().cancel(id);
 }
 
+#[tauri::command]
+#[specta::specta]
+async fn agent_set_mode(id: SessionId, plan: bool, state: tauri::State<'_, State>) -> Res<()> {
+    state.core.chat().set_mode(id, plan).await.map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn agent_rename(id: SessionId, title: String, state: tauri::State<'_, State>) -> Res<()> {
+    state.core.chat().rename(id, title).await.map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn agent_delete(id: SessionId, state: tauri::State<'_, State>) -> Res<()> {
+    state.core.chat().delete(id).await.map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn agent_init(id: SessionId, state: tauri::State<'_, State>) -> Res<()> {
+    state
+        .core
+        .chat()
+        .send(id, termflow_agent::INIT_PROMPT.trim().to_owned())
+        .await
+        .map_err(err)
+}
+
+#[derive(Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum ApprovalKind {
+    AllowOnce,
+    AllowSession,
+    Deny,
+}
+
+/// Answer an approval card. Returns false if the call was no longer waiting.
+#[tauri::command]
+#[specta::specta]
+fn agent_approve(
+    call_id: CallId,
+    kind: ApprovalKind,
+    feedback: Option<String>,
+    state: tauri::State<'_, State>,
+) -> bool {
+    let a = match kind {
+        ApprovalKind::AllowOnce => termflow_agent::Approval::AllowOnce,
+        ApprovalKind::AllowSession => termflow_agent::Approval::AllowSession,
+        ApprovalKind::Deny => termflow_agent::Approval::Deny { feedback },
+    };
+    state.core.chat().approve(call_id, a)
+}
+
+#[derive(Serialize, specta::Type)]
+pub struct SessionUsage {
+    input: f64,
+    output: f64,
+    cache_read: f64,
+    cache_write: f64,
+    reasoning: f64,
+    requests: f64,
+}
+
+#[tauri::command]
+#[specta::specta]
+#[allow(clippy::cast_precision_loss)] // token counts are far below 2^52
+fn agent_usage(id: SessionId, state: tauri::State<'_, State>) -> Res<SessionUsage> {
+    let (input, output, cache_read, cache_write, reasoning, requests) = state.core.chat().usage(id).map_err(err)?;
+    Ok(SessionUsage {
+        input: input as f64,
+        output: output as f64,
+        cache_read: cache_read as f64,
+        cache_write: cache_write as f64,
+        reasoning: reasoning as f64,
+        requests: requests as f64,
+    })
+}
+
+#[tauri::command]
+#[specta::specta]
+fn workspaces_recent(state: tauri::State<'_, State>) -> Res<Vec<Workspace>> {
+    state.core.recent_workspaces().map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn workspace_open(path: String, state: tauri::State<'_, State>) -> Res<Workspace> {
+    state.core.open_workspace(path).await.map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn workspace_forget(id: String, state: tauri::State<'_, State>) -> Res<()> {
+    state.core.forget_workspace(id).await.map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+fn workspace_get(id: String, state: tauri::State<'_, State>) -> Res<Option<Workspace>> {
+    state.core.workspace(&id).map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+fn project_files(workspace_id: String, state: tauri::State<'_, State>) -> Res<Vec<String>> {
+    state.core.project_files(&workspace_id).map_err(err)
+}
+
 /// Debug builds: the UI's frame-time monitor reports here so results land in the log.
 #[tauri::command]
 #[specta::specta]
@@ -325,6 +435,17 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             agent_transcript,
             agent_send,
             agent_cancel,
+            agent_set_mode,
+            agent_rename,
+            agent_delete,
+            agent_init,
+            agent_approve,
+            agent_usage,
+            workspaces_recent,
+            workspace_open,
+            workspace_forget,
+            workspace_get,
+            project_files,
         ])
         .events(collect_events![CoreEvent])
         // IPC payloads are JSON-parsed in the webview, so 64-bit ints already arrive as JS numbers;
@@ -361,6 +482,7 @@ pub fn run() -> anyhow::Result<()> {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);

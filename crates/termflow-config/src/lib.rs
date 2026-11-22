@@ -14,6 +14,9 @@ pub struct Config {
     pub ui: UiConfig,
     pub terminal: TerminalConfig,
     pub updates: UpdatesConfig,
+    /// Extra `[[permissions]]` rules, applied after the built-in defaults (last match wins).
+    #[cfg_attr(feature = "specta", specta(skip))]
+    pub permissions: Vec<termflow_perms::Rule>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]

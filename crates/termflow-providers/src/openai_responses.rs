@@ -45,10 +45,10 @@ pub fn render(transcript: &[Turn], ctx: &RenderContext) -> Value {
                 }
                 (_, Part::Reasoning { native, .. }) if ctx.may_resend(p) => input.push(native.clone()),
                 (_, Part::ToolCall { call_id, name, args }) => input.push(json!({
-                    "type":"function_call","call_id":call_id.to_string(),"name":name,"arguments":args.to_string()
+                    "type":"function_call","call_id":ctx.call_id(*call_id),"name":name,"arguments":args.to_string()
                 })),
                 (_, Part::ToolResult { call_id, content, .. }) => input.push(json!({
-                    "type":"function_call_output","call_id":call_id.to_string(),"output":text_of(content)
+                    "type":"function_call_output","call_id":ctx.call_id(*call_id),"output":text_of(content)
                 })),
                 _ => {}
             }
