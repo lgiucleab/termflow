@@ -32,7 +32,7 @@ pub struct UiConfig {
 impl Default for UiConfig {
     fn default() -> Self {
         Self {
-            theme: "dark".into(),
+            theme: "mono-dark".into(),
             locale: None,
         }
     }

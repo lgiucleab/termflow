@@ -13,6 +13,7 @@ const block: Block = {
   exit_code: 101,
   started_at: "2026-11-22T10:00:00Z",
   finished_at: "2026-11-22T10:00:04.200Z",
+  chat_session_id: null,
 };
 
 test("formats durations", () => {

@@ -22,38 +22,6 @@ button {
   cursor: pointer;
 }
 
-.tf-workspace {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-.tf-tabbar {
-  display: flex;
-  align-items: stretch;
-  gap: 2px;
-  padding: 4px 6px 0;
-  background: var(--tf-surface);
-  border-bottom: 1px solid var(--tf-border);
-  font-size: 12px;
-}
-.tf-tab {
-  display: flex;
-  align-items: center;
-  border-radius: 6px 6px 0 0;
-  color: var(--tf-text-muted);
-  max-width: 220px;
-}
-.tf-tab[data-active="1"] {
-  background: var(--tf-bg);
-  color: var(--tf-text);
-}
-.tf-tab-label {
-  padding: 6px 4px 6px 10px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .tf-tab-input {
   width: 140px;
   margin: 3px 4px 3px 8px;
@@ -63,211 +31,6 @@ button {
   border-radius: 4px;
   font: inherit;
   padding: 1px 4px;
-}
-.tf-tab-close {
-  padding: 4px 8px 4px 4px;
-  opacity: 0.6;
-}
-.tf-tab-close:hover,
-.tf-tab-new:hover,
-.tf-tab-palette:hover {
-  opacity: 1;
-  color: var(--tf-text);
-}
-.tf-tab-new,
-.tf-tab-palette {
-  padding: 4px 8px;
-  color: var(--tf-text-muted);
-}
-.tf-tabpanel {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-.tf-tabpanel[hidden] {
-  display: none;
-}
-
-.tf-split {
-  flex: 1;
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-}
-.tf-split[data-dir="column"] {
-  flex-direction: column;
-}
-.tf-split-part {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-}
-.tf-divider {
-  flex: 0 0 4px;
-  background: var(--tf-border);
-  cursor: col-resize;
-  touch-action: none;
-}
-.tf-split[data-dir="column"] > .tf-divider {
-  cursor: row-resize;
-}
-.tf-divider:hover {
-  background: var(--tf-accent);
-}
-
-.tf-pane {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  padding: 4px 0 0 6px;
-  background: var(--tf-bg);
-}
-.tf-pane[data-focused="0"] {
-  opacity: 0.88;
-}
-.tf-pane-slot {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-}
-/* Definite size so xterm's fit addon can measure rows/cols. */
-.tf-terminal {
-  position: absolute;
-  inset: 0;
-}
-.tf-terminal .xterm {
-  height: 100%;
-}
-.tf-pane-badge {
-  position: absolute;
-  top: 6px;
-  right: 12px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  font-size: 11px;
-  border-radius: 999px;
-  background: var(--tf-surface2);
-  color: var(--tf-text-muted);
-  border: 1px solid var(--tf-border);
-  z-index: 5;
-}
-
-/* Block header decorations (one terminal row tall). */
-.xterm .xterm-screen .tf-block-header {
-  z-index: 6;
-  pointer-events: auto;
-}
-.tf-block-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 100%;
-  padding: 0 6px;
-  font: 11px var(--tf-font-ui);
-  background: var(--tf-surface2);
-  border-top: 1px solid var(--tf-border);
-  color: var(--tf-text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-}
-.tf-block-row[data-ok="0"] {
-  box-shadow: inset 3px 0 0 var(--tf-danger);
-}
-.tf-block-row[data-ok="1"] {
-  box-shadow: inset 3px 0 0 var(--tf-success);
-}
-.tf-badge {
-  font: 600 10px var(--tf-font-mono);
-  padding: 0 5px;
-  border-radius: 4px;
-  color: var(--tf-bg);
-  background: var(--tf-success);
-}
-.tf-badge[data-ok="0"] {
-  background: var(--tf-danger);
-}
-.tf-block-cmd {
-  font-family: var(--tf-font-mono);
-  color: var(--tf-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tf-block-meta {
-  flex-shrink: 0;
-}
-.tf-block-actions {
-  margin-left: auto;
-  display: flex;
-  gap: 2px;
-  opacity: 0;
-  transition: opacity var(--tf-motion);
-}
-.tf-block-row:hover .tf-block-actions,
-.tf-block-row:focus-within .tf-block-actions {
-  opacity: 1;
-}
-.tf-block-btn {
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 16px;
-  border-radius: 4px;
-}
-.tf-block-btn:hover {
-  background: var(--tf-border);
-  color: var(--tf-text);
-}
-.xterm .xterm-screen .tf-block-cover {
-  z-index: 5;
-  pointer-events: auto;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  padding-left: 12px;
-  font: 11px var(--tf-font-ui);
-  color: var(--tf-text-muted);
-  background: var(--tf-bg);
-}
-
-.tf-findbar {
-  position: absolute;
-  top: 6px;
-  right: 12px;
-  z-index: 7;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 6px;
-  background: var(--tf-surface);
-  border: 1px solid var(--tf-border);
-  border-radius: var(--tf-radius);
-  box-shadow: 0 6px 20px rgb(0 0 0 / 0.3);
-  color: var(--tf-text-muted);
-}
-.tf-findbar input {
-  width: 200px;
-  background: var(--tf-surface2);
-  color: var(--tf-text);
-  border: 1px solid var(--tf-border);
-  border-radius: 4px;
-  padding: 2px 6px;
-  font: 12px var(--tf-font-ui);
-}
-.tf-findbar input[data-notfound="1"] {
-  border-color: var(--tf-danger);
-}
-.tf-findbar button {
-  padding: 2px;
-  border-radius: 4px;
-}
-.tf-findbar button:hover {
-  background: var(--tf-border);
-  color: var(--tf-text);
 }
 
 .tf-dialog-backdrop {
@@ -362,49 +125,6 @@ button {
 .tf-palette kbd {
   font: 11px var(--tf-font-ui);
   color: var(--tf-text-muted);
-}
-
-.tf-agent {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--tf-bg);
-}
-.tf-agent h2 {
-  margin: 0 0 4px;
-  font-size: 16px;
-}
-.tf-attachments {
-  list-style: none;
-  padding: 0;
-  display: grid;
-  gap: 10px;
-}
-.tf-attachments li {
-  border: 1px solid var(--tf-border);
-  border-radius: var(--tf-radius);
-  background: var(--tf-surface);
-  overflow: hidden;
-}
-.tf-attachment-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--tf-border);
-}
-.tf-attachment-head code {
-  flex: 1;
-  font: 12px var(--tf-font-mono);
-}
-.tf-attachments pre {
-  margin: 0;
-  padding: 10px;
-  max-height: 240px;
-  overflow: auto;
-  font: 12px var(--tf-font-mono);
-  white-space: pre-wrap;
 }
 
 .tf-status {
@@ -860,27 +580,6 @@ button {
   color: var(--tf-success);
 }
 
-.tf-panel-resize {
-  flex: 0 0 4px;
-  cursor: row-resize;
-  background: var(--tf-border);
-  touch-action: none;
-}
-.tf-panel-resize:hover {
-  background: var(--tf-accent);
-}
-.tf-panel {
-  flex-shrink: 0;
-  display: flex;
-  min-height: 0;
-}
-.tf-panel .tf-workspace {
-  flex: 1;
-}
-.tf-pane-note {
-  margin: auto;
-  font-size: 12px;
-}
 .tf-status-btn {
   padding: 0 6px;
   color: var(--tf-text-muted);
@@ -1141,4 +840,186 @@ button {
 }
 .tf-menu > div[data-selected="1"] {
   background: var(--tf-surface2);
+}
+
+/* ---- Unified timeline (decision 0002) ---- */
+.tf-timeline-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tf-block {
+  border: 1px solid var(--tf-border);
+  border-radius: var(--tf-radius);
+  background: var(--tf-surface);
+  font-family: var(--tf-font-mono);
+  font-size: 12px;
+}
+.tf-block[data-ok="0"] {
+  border-left: 2px solid var(--tf-danger);
+}
+.tf-block-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 8px;
+  color: var(--tf-text-muted);
+}
+.tf-block-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+}
+.tf-prompt-glyph {
+  color: var(--tf-text-muted);
+  flex-shrink: 0;
+}
+.tf-block-command {
+  color: var(--tf-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tf-block-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--tf-motion);
+}
+.tf-block:hover .tf-block-actions,
+.tf-block-head:focus-within .tf-block-actions {
+  opacity: 1;
+}
+.tf-block-actions button,
+.tf-stop {
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 4px;
+}
+.tf-block-actions button:hover,
+.tf-stop:hover {
+  background: var(--tf-surface2);
+  color: var(--tf-text);
+}
+.tf-block-meta {
+  flex-shrink: 0;
+  font-size: 11px;
+}
+.tf-exit {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--tf-success);
+}
+.tf-exit[data-ok="0"] {
+  color: var(--tf-danger);
+}
+.tf-block-out {
+  margin: 0;
+  padding: 6px 10px 8px;
+  max-height: 480px;
+  overflow: auto;
+  border-top: 1px solid var(--tf-border);
+  color: var(--tf-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: 12px / 1.45 var(--tf-font-mono);
+}
+/* serializeAsHTML wraps rows in <pre>; it carries the terminal font inline. */
+.tf-block-html pre {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.tf-running {
+  animation: tf-pulse 1.4s ease-in-out infinite;
+}
+.tf-live-slot {
+  position: relative;
+  border-top: 1px solid var(--tf-border);
+  padding: 2px 4px;
+  overflow: hidden;
+}
+.tf-live-term,
+.tf-raw-term {
+  position: absolute;
+  inset: 2px 4px;
+}
+/* Full-screen programs (vim, less, htop) take over the whole timeline. */
+.tf-block-live[data-alt="1"] {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0;
+  border: 0;
+  background: var(--tf-bg);
+}
+.tf-block-live[data-alt="1"] .tf-live-slot {
+  flex: 1;
+}
+.tf-raw {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  background: var(--tf-bg);
+}
+.tf-raw-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--tf-border);
+  font-size: 12px;
+  color: var(--tf-text-muted);
+}
+.tf-raw-bar button:hover {
+  color: var(--tf-text);
+}
+.tf-raw-slot {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.tf-raw-toggle {
+  font-size: 12px;
+  color: var(--tf-text-muted);
+}
+.tf-raw-toggle[data-on="1"] {
+  color: var(--tf-text);
+}
+.tf-mode-glyph {
+  align-self: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--tf-radius);
+  font: 15px var(--tf-font-mono);
+  color: var(--tf-text-muted);
+}
+.tf-mode-glyph[data-locked="1"] {
+  color: var(--tf-text);
+  background: var(--tf-surface2);
+}
+.tf-composer[data-mode="shell"] textarea {
+  font-family: var(--tf-font-mono);
+}
+.tf-composer-meta {
+  align-self: center;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--tf-text-muted);
 }

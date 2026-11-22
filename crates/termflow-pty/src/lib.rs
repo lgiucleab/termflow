@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use tokio::sync::mpsc;
 
-pub use detect::{default_shell, detect_shells, find_on_path, shell_kind_for};
+pub use detect::{default_shell, detect_shells, find_on_path, list_executables, shell_kind_for};
 
 /// Reader → consumer queue depth. With 64 KiB reads this caps buffering at ~2 MiB; when the
 /// consumer stops pulling, the reader blocks and the child is throttled by the PTY itself.

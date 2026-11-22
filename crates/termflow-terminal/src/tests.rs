@@ -45,6 +45,7 @@ impl Harness {
                     cols: 120,
                     rows: 30,
                     initial_input: None,
+                    chat_session: None,
                 },
                 Box::new(move |b| {
                     out.lock().unwrap().extend(b);

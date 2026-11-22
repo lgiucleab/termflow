@@ -1,7 +1,7 @@
 //! Terminal block metadata and output excerpts.
 
 use rusqlite::{Connection, OptionalExtension, Row, params};
-use termflow_types::{Block, BlockId};
+use termflow_types::{Block, BlockId, SessionId};
 
 use crate::StoreError;
 
@@ -25,8 +25,8 @@ where
 /// Insert a finished block with its (ANSI-stripped, capped) output.
 pub fn insert(conn: &Connection, b: &Block, output: &str) -> Result<(), StoreError> {
     conn.execute(
-        "INSERT INTO blocks (id, terminal_session_id, seq, command, cwd, git_branch, shell, exit_code, started_at, finished_at, output_excerpt)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        "INSERT INTO blocks (id, terminal_session_id, seq, command, cwd, git_branch, shell, exit_code, started_at, finished_at, output_excerpt, chat_session_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         params![
             b.id.to_string(),
             b.terminal_id.to_string(),
@@ -39,12 +39,13 @@ pub fn insert(conn: &Connection, b: &Block, output: &str) -> Result<(), StoreErr
             ts(b.started_at),
             b.finished_at.map(ts),
             output,
+            b.chat_session_id.map(|c| c.to_string()),
         ],
     )?;
     Ok(())
 }
 
-const COLS: &str = "id, terminal_session_id, seq, command, cwd, git_branch, shell, exit_code, started_at, finished_at";
+const COLS: &str = "id, terminal_session_id, seq, command, cwd, git_branch, shell, exit_code, started_at, finished_at, chat_session_id";
 
 fn row(r: &Row<'_>) -> rusqlite::Result<Block> {
     let id: String = r.get(0)?;
@@ -62,6 +63,12 @@ fn row(r: &Row<'_>) -> rusqlite::Result<Block> {
         exit_code: r.get(7)?,
         started_at: parse_ts(&started)?,
         finished_at: finished.as_deref().map(parse_ts).transpose()?,
+        chat_session_id: r
+            .get::<_, Option<String>>(10)?
+            .as_deref()
+            .map(parse_id)
+            .transpose()?
+            .map(SessionId),
     })
 }
 
@@ -70,9 +77,21 @@ pub fn get(conn: &Connection, id: BlockId) -> Result<Option<(Block, String)>, St
         .query_row(
             &format!("SELECT {COLS}, output_excerpt FROM blocks WHERE id = ?1"),
             [id.to_string()],
-            |r| Ok((row(r)?, r.get::<_, Option<String>>(10)?.unwrap_or_default())),
+            |r| Ok((row(r)?, r.get::<_, Option<String>>(11)?.unwrap_or_default())),
         )
         .optional()?)
+}
+
+/// A chat's command blocks with their output, oldest first (last `limit`).
+pub fn for_chat(conn: &Connection, chat: SessionId, limit: u32) -> Result<Vec<(Block, String)>, StoreError> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT * FROM (SELECT {COLS}, output_excerpt FROM blocks WHERE chat_session_id = ?1 ORDER BY started_at DESC LIMIT ?2)
+         ORDER BY started_at"
+    ))?;
+    let rows = stmt.query_map(params![chat.to_string(), limit], |r| {
+        Ok((row(r)?, r.get::<_, Option<String>>(11)?.unwrap_or_default()))
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
 }
 
 /// Most recently finished blocks first.
@@ -93,6 +112,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::open(dir.path().join("t.db")).unwrap();
         let t0 = jiff::Timestamp::UNIX_EPOCH;
+        let chat = SessionId::new();
         let mk = |seq: u32, secs: i64| Block {
             id: BlockId::new(),
             terminal_id: TerminalId::new(),
@@ -104,6 +124,7 @@ mod tests {
             exit_code: Some(0),
             started_at: t0,
             finished_at: Some(t0 + jiff::SignedDuration::from_secs(secs)),
+            chat_session_id: (seq == 1).then_some(chat),
         };
         let (a, b) = (mk(0, 1), mk(1, 2));
         let (a2, b2) = (a.clone(), b.clone());
@@ -118,5 +139,8 @@ mod tests {
         assert_eq!(get(&r, a.id).unwrap().unwrap(), (a.clone(), "out-a".to_owned()));
         assert_eq!(recent(&r, 10).unwrap(), vec![b, a]);
         assert!(get(&r, BlockId::new()).unwrap().is_none());
+        let mine = for_chat(&r, chat, 10).unwrap();
+        assert_eq!(mine.len(), 1);
+        assert_eq!(mine[0].1, "out-b");
     }
 }

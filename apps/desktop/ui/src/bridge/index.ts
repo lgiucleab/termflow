@@ -43,6 +43,8 @@ export interface OpenTerminalOptions {
   shellId?: string;
   cwd?: string;
   agentId?: string;
+  /** Chat that owns this shell (its blocks join that chat's timeline). */
+  chatSessionId?: string;
   cols: number;
   rows: number;
 }
@@ -89,6 +91,10 @@ export interface Bridge {
   forgetWorkspace(id: string): Promise<void>;
   workspace(id: string): Promise<Workspace | null>;
   projectFiles(workspaceId: string): Promise<string[]>;
+  /** A chat's command blocks with output, oldest first. */
+  chatBlocks(id: SessionId): Promise<{ block: Block; output: string }[]>;
+  /** Executable names on PATH (for shell-vs-agent detection). */
+  shellExecutables(): Promise<string[]>;
   /** Native folder picker; null if cancelled. */
   pickFolder(): Promise<string | null>;
   setAgentModel(
@@ -118,6 +124,7 @@ export const tauriBridge: Bridge = {
       shell_id: opts.shellId ?? null,
       cwd: opts.cwd ?? null,
       agent_id: opts.agentId ?? null,
+      chat_session_id: opts.chatSessionId ?? null,
       cols: opts.cols,
       rows: opts.rows,
       on_output: channel.toJSON(),
@@ -153,6 +160,8 @@ export const tauriBridge: Bridge = {
   forgetWorkspace: (id) => done(commands.workspaceForget(id)),
   workspace: (id) => commands.workspaceGet(id),
   projectFiles: (w) => commands.projectFiles(w),
+  chatBlocks: (id) => commands.chatBlocks(id),
+  shellExecutables: () => commands.shellExecutables(),
   pickFolder: async () => {
     const r = await openDialog({ directory: true, multiple: false });
     return typeof r === "string" ? r : null;

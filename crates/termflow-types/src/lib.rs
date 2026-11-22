@@ -245,6 +245,9 @@ pub struct Block {
     pub started_at: Timestamp,
     #[cfg_attr(feature = "specta", specta(type = Option<String>))]
     pub finished_at: Option<Timestamp>,
+    /// The chat whose shell ran this command (unified timeline, decision 0002).
+    #[serde(default)]
+    pub chat_session_id: Option<SessionId>,
 }
 
 /// Classified provider error; adapters produce it, only the router acts on it (`BUILD_PROMPT` §7.4).

@@ -51,6 +51,8 @@ pub struct OpenOptions {
     pub rows: u16,
     /// Typed into the shell once it shows its first prompt (e.g. `claude\r`).
     pub initial_input: Option<String>,
+    /// Chat that owns this shell; its blocks are tagged with it (decision 0002).
+    pub chat_session: Option<termflow_types::SessionId>,
 }
 
 struct Session {
@@ -142,6 +144,7 @@ impl TerminalManager {
             tracker: BlockTracker::new(id, opts.shell.name.clone()),
             scanner: Scanner::new(),
             initial_input: if integrated { initial_input } else { None },
+            chat_session: opts.chat_session,
             store: self.store.clone(),
             bus: self.bus.clone(),
             sink,
@@ -188,6 +191,14 @@ impl TerminalManager {
         Ok(termflow_store::blocks::get(&self.store.reader()?, id)?)
     }
 
+    pub fn chat_blocks(
+        &self,
+        chat: termflow_types::SessionId,
+        limit: u32,
+    ) -> Result<Vec<(Block, String)>, TerminalError> {
+        Ok(termflow_store::blocks::for_chat(&self.store.reader()?, chat, limit)?)
+    }
+
     pub fn recent_blocks(&self, limit: u32) -> Result<Vec<Block>, TerminalError> {
         Ok(termflow_store::blocks::recent(&self.store.reader()?, limit)?)
     }
@@ -204,6 +215,7 @@ struct Pump {
     tracker: BlockTracker,
     scanner: Scanner,
     initial_input: Option<String>,
+    chat_session: Option<termflow_types::SessionId>,
     store: Store,
     bus: broadcast::Sender<AppEvent>,
     sink: OutputSink,
@@ -270,8 +282,12 @@ impl Pump {
                 continue;
             };
             let app_ev = match tev {
-                TrackerEvent::Started(block) => AppEvent::BlockStarted { block },
-                TrackerEvent::Finished { block, output } => {
+                TrackerEvent::Started(mut block) => {
+                    block.chat_session_id = self.chat_session;
+                    AppEvent::BlockStarted { block }
+                }
+                TrackerEvent::Finished { mut block, output } => {
+                    block.chat_session_id = self.chat_session;
                     let b = block.clone();
                     if let Err(e) = self
                         .store

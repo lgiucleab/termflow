@@ -110,6 +110,7 @@ impl BlockTracker {
                     exit_code: None,
                     started_at: now,
                     finished_at: None,
+                    chat_session_id: None,
                 };
                 self.seq += 1;
                 self.output.clear();

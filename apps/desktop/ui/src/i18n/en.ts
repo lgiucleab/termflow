@@ -6,6 +6,7 @@ export const en = {
     exited: "Process exited with code {{ code }}. Press Enter to close.",
   },
   blocks: {
+    ask: "Ask the agent about this",
     exitCode: "Exit code {{ code }}",
     unknownCommand: "(command)",
     command: "command",
@@ -129,6 +130,9 @@ export const en = {
     noResults: "No matches",
   },
   actions: {
+    nextChat: "Next chat",
+    prevChat: "Previous chat",
+    runExternalAgent: "Run {{ name }} in this chat",
     newChat: "New chat",
     toggleTerminal: "Toggle terminal panel",
     openProject: "Open or switch project…",
@@ -202,6 +206,38 @@ export const en = {
       "Commands: /plan /build /model /clear /attach /init /cost /help. Type @ to attach a file or terminal block. Shift+Tab: Plan/Build · Esc: stop · Cmd/Ctrl+J: terminal · Cmd/Ctrl+Shift+N: new chat · Cmd/Ctrl+K: command palette.",
   },
   status: { label: "Status", blocksOn: "Blocks ✓", blocksOff: "Blocks unavailable" },
+  shell: {
+    raw: "Terminal",
+    rawHint: "Show this chat's shell as a classic terminal (Cmd/Ctrl+J)",
+    rawTitle: "Classic terminal: this chat's shell",
+    degraded: "Shell integration isn't available for this shell, so it runs as a classic terminal.",
+    backToTimeline: "Back to timeline",
+    running: "running…",
+    runningHint: "A command is running: type in its block. Ctrl+C stops it.",
+    stop: "Stop",
+    busy: "A command is still running in this chat.",
+    notReady: "The shell isn't ready yet.",
+    state: {
+      starting: "shell starting",
+      idle: "shell ready",
+      running: "running",
+      degraded: "classic terminal",
+      exited: "shell exited",
+    },
+  },
+  input: {
+    shellHint: "Run a command…  (Cmd/Ctrl+I: ask the agent instead)",
+    agentHint: "Ask the agent, or type a command…",
+    emptyHint:
+      "Type a command to run it here, or ask the agent in plain words. ! forces a command, ? forces the agent. / for agent commands, @ to attach a file.",
+    autoAttached:
+      "Ran since the agent last replied; sent with your next question. × to leave it out.",
+    modeToggle: "Switch between command and agent ({{ key }})",
+    toShell: "Sends to the shell. Click to ask the agent instead.",
+    toAgent: "Sends to the agent. Click to run as a command instead.",
+    shell: "command",
+    agent: "agent",
+  },
 };
 
 export type Dict = typeof en;

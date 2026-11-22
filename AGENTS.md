@@ -63,8 +63,8 @@ Untestable-here behaviour goes in `docs/MANUAL_TEST_CHECKLIST.md`.
 - `crates/termflow-{mcp,acp,sandbox,worktrees,daemon}`, `apps/cli` — v1 stubs
 - `apps/desktop/src-tauri` — Tauri glue only
 - `apps/desktop/ui/src/bridge` — the only code that calls Tauri; `generated/` is tauri-specta output
-- `apps/desktop/ui/src/features/terminal` — xterm controller (outlives components), block headers; `layout/` pure tab/split model
+- `apps/desktop/ui/src/features/chat` — unified timeline: `ChatView`, `chatShell` (shell per chat, live/frozen blocks), `splitter` (OSC/alt-screen), `classify` (command vs question)
 
 ## Status
-Current milestone: **M2b — Tools and agent loop** (`docs/specs/M2.md`). M0, M1, M2a done (PRs #1, #2).
+Current milestone: **M2c — Unified timeline and Mono** (`docs/specs/M2c.md`). M0, M1, M2a, M2b done. Next: M3 (router fallback).
 Known issues: see the spec's "Known issues" section.

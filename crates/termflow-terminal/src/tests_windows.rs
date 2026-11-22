@@ -77,6 +77,7 @@ async fn pwsh_blocks() {
                 cols: 120,
                 rows: 30,
                 initial_input: None,
+                chat_session: None,
             },
             Box::new(move |b| {
                 sink_out.lock().unwrap().extend(b);

@@ -8,6 +8,7 @@ export const esES: Dict = {
     exited: "El proceso terminó con código {{ code }}. Pulsa Intro para cerrar.",
   },
   blocks: {
+    ask: "Preguntar al agente sobre esto",
     exitCode: "Código de salida {{ code }}",
     unknownCommand: "(comando)",
     command: "comando",
@@ -132,6 +133,9 @@ export const esES: Dict = {
     noResults: "Sin resultados",
   },
   actions: {
+    nextChat: "Chat siguiente",
+    prevChat: "Chat anterior",
+    runExternalAgent: "Ejecutar {{ name }} en este chat",
     newChat: "Nuevo chat",
     toggleTerminal: "Mostrar u ocultar la terminal",
     openProject: "Abrir o cambiar de proyecto…",
@@ -206,4 +210,36 @@ export const esES: Dict = {
       "Comandos: /plan /build /model /clear /attach /init /cost /help. Escribe @ para adjuntar un archivo o bloque. Mayús+Tab: Planificar/Construir · Esc: detener · Cmd/Ctrl+J: terminal · Cmd/Ctrl+Mayús+N: nuevo chat · Cmd/Ctrl+K: paleta de comandos.",
   },
   status: { label: "Estado", blocksOn: "Bloques ✓", blocksOff: "Bloques no disponibles" },
+  shell: {
+    raw: "Terminal",
+    rawHint: "Mostrar la shell de este chat como terminal clásica (Cmd/Ctrl+J)",
+    rawTitle: "Terminal clásica: la shell de este chat",
+    degraded: "Esta shell no tiene integración, así que funciona como terminal clásica.",
+    backToTimeline: "Volver a la línea de tiempo",
+    running: "ejecutando…",
+    runningHint: "Hay un comando en marcha: escribe en su bloque. Ctrl+C lo detiene.",
+    stop: "Detener",
+    busy: "Aún hay un comando en marcha en este chat.",
+    notReady: "La shell aún no está lista.",
+    state: {
+      starting: "iniciando shell",
+      idle: "shell lista",
+      running: "ejecutando",
+      degraded: "terminal clásica",
+      exited: "la shell terminó",
+    },
+  },
+  input: {
+    shellHint: "Ejecuta un comando…  (Cmd/Ctrl+I: preguntar al agente)",
+    agentHint: "Pregunta al agente o escribe un comando…",
+    emptyHint:
+      "Escribe un comando para ejecutarlo aquí o pregunta al agente con tus palabras. ! fuerza comando, ? fuerza agente. / para comandos del agente, @ para adjuntar un archivo.",
+    autoAttached:
+      "Ejecutado desde la última respuesta del agente; se envía con tu próxima pregunta. × para quitarlo.",
+    modeToggle: "Cambiar entre comando y agente ({{ key }})",
+    toShell: "Se envía a la shell. Haz clic para preguntar al agente.",
+    toAgent: "Se envía al agente. Haz clic para ejecutarlo como comando.",
+    shell: "comando",
+    agent: "agente",
+  },
 };

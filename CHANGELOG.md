@@ -4,6 +4,14 @@ All notable changes to this project. Format: Keep a Changelog; versions follow S
 
 ## [Unreleased]
 
+### Changed (M2c — Unified timeline, Mono)
+- **One timeline per chat** (decision 0002): shell commands and agent turns share one stream and one input box. Commands run in the chat's own shell and appear as Warp-style blocks (command, exit, duration, coloured output, copy/ask/re-run). Full-screen programs take over the timeline, and Cmd/Ctrl+J shows the classic terminal view.
+- The input auto-detects command vs question (`$` / `✦` glyph); `!`, `?` and Cmd/Ctrl+I override it. Commands run since the agent's last reply are attached to your next question as removable chips.
+- **Mono Dark** (new default) and **Mono Light** themes: black and white with green/red only for status. WCAG AA is checked in tests.
+
+### Removed (M2c)
+- Terminal tabs, splits and the bottom terminal panel (replaced by the timeline and the classic terminal view).
+
 ### Added (M2b — Tools, agent loop, chat-first)
 - **Chat-first layout** (decision 0001): start screen with recent projects, sidebar of chats per project, terminal as a toggleable panel (Cmd/Ctrl+J) that opens in the project folder.
 - The agent works in the project folder with 11 tools: read, write, edit, apply_patch (V4A), bash, grep, glob, ls, todo, attach_block, webfetch.

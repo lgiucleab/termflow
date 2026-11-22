@@ -2,16 +2,16 @@
 
 /* Design tokens. Themes override these variables only. */
 :root {
-  --tf-bg: #0e1014;
-  --tf-surface: #161920;
-  --tf-surface2: #1d212a;
-  --tf-border: #262a33;
-  --tf-text: #e6e8ec;
-  --tf-text-muted: #8b919c;
-  --tf-accent: #6ea8ff;
-  --tf-success: #4cc38a;
-  --tf-danger: #f06a6a;
-  --tf-radius: 8px;
+  --tf-bg: #000000;
+  --tf-surface: #0a0a0a;
+  --tf-surface2: #141414;
+  --tf-border: #1f1f1f;
+  --tf-text: #fafafa;
+  --tf-text-muted: #8a8a8a;
+  --tf-accent: #fafafa;
+  --tf-success: #3fb950;
+  --tf-danger: #f85149;
+  --tf-radius: 6px;
   --tf-space: 8px;
   --tf-font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
   --tf-font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;

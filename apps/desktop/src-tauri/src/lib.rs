@@ -64,6 +64,8 @@ pub struct OpenTerminal {
     rows: u16,
     /// Agent CLI id from `list_agents`, started in the new shell.
     agent_id: Option<String>,
+    /// Chat that owns this shell (its blocks join the chat's timeline).
+    chat_session_id: Option<SessionId>,
     /// `Channel.toJSON()` of a channel receiving raw output bytes (`ArrayBuffer`).
     #[specta(type = String)]
     on_output: JavaScriptChannelId,
@@ -100,6 +102,7 @@ async fn terminal_open(
             cols: req.cols,
             rows: req.rows,
             initial_input,
+            chat_session: req.chat_session_id,
         },
         Box::new(move |bytes| channel.send(InvokeResponseBody::Raw(bytes)).is_ok()),
     )
@@ -370,6 +373,26 @@ fn agent_usage(id: SessionId, state: tauri::State<'_, State>) -> Res<SessionUsag
     })
 }
 
+/// A chat's command blocks with output, oldest first.
+#[tauri::command]
+#[specta::specta]
+fn chat_blocks(id: SessionId, state: tauri::State<'_, State>) -> Res<Vec<BlockOutput>> {
+    let rows = state.core.terminals().chat_blocks(id, 500).map_err(err)?;
+    Ok(rows
+        .into_iter()
+        .map(|(block, output)| BlockOutput { block, output })
+        .collect())
+}
+
+/// Executable names on PATH, for the input box's shell-vs-agent detection.
+#[tauri::command]
+#[specta::specta]
+async fn shell_executables() -> Vec<String> {
+    tokio::task::spawn_blocking(termflow_pty::list_executables)
+        .await
+        .unwrap_or_default()
+}
+
 #[tauri::command]
 #[specta::specta]
 fn workspaces_recent(state: tauri::State<'_, State>) -> Res<Vec<Workspace>> {
@@ -446,6 +469,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             workspace_forget,
             workspace_get,
             project_files,
+            chat_blocks,
+            shell_executables,
         ])
         .events(collect_events![CoreEvent])
         // IPC payloads are JSON-parsed in the webview, so 64-bit ints already arrive as JS numbers;

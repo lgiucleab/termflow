@@ -28,7 +28,7 @@
       "$ref": "#/$defs/UiConfig",
       "default": {
         "locale": null,
-        "theme": "dark"
+        "theme": "mono-dark"
       }
     },
     "updates": {
@@ -158,7 +158,7 @@
         "theme": {
           "description": "UI theme id.",
           "type": "string",
-          "default": "dark"
+          "default": "mono-dark"
         }
       },
       "additionalProperties": false

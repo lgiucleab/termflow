@@ -48,6 +48,10 @@ export const commands = {
 	workspaceForget: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("workspace_forget", { id }, options),
 	workspaceGet: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<Workspace_Serialize | null>("workspace_get", { id }, options),
 	projectFiles: (workspaceId: string, options?: InvokeOptions) => __TAURI_INVOKE<string[]>("project_files", { workspaceId }, options),
+	/**  A chat's command blocks with output, oldest first. */
+	chatBlocks: (id: SessionId, options?: InvokeOptions) => __TAURI_INVOKE<BlockOutput_Serialize[]>("chat_blocks", { id }, options),
+	/**  Executable names on PATH, for the input box's shell-vs-agent detection. */
+	shellExecutables: (options?: InvokeOptions) => __TAURI_INVOKE<string[]>("shell_executables", undefined, options),
 };
 
 /** Events */
@@ -210,6 +214,8 @@ export type Block_Deserialize = {
 	/**  RFC 3339. */
 	started_at: string,
 	finished_at?: string | null,
+	/**  The chat whose shell ran this command (unified timeline, decision 0002). */
+	chat_session_id?: SessionId | null,
 };
 
 /**  One command run in a terminal, as delimited by shell integration marks. */
@@ -226,6 +232,8 @@ export type Block_Serialize = {
 	/**  RFC 3339. */
 	started_at: string,
 	finished_at: string | null,
+	/**  The chat whose shell ran this command (unified timeline, decision 0002). */
+	chat_session_id: SessionId | null,
 };
 
 export type CallId = string;
@@ -291,6 +299,8 @@ export type OpenTerminal_Deserialize = {
 	rows: number,
 	/**  Agent CLI id from `list_agents`, started in the new shell. */
 	agent_id?: string | null,
+	/**  Chat that owns this shell (its blocks join the chat's timeline). */
+	chat_session_id?: SessionId | null,
 	/**  `Channel.toJSON()` of a channel receiving raw output bytes (`ArrayBuffer`). */
 	on_output: string,
 };
@@ -303,6 +313,8 @@ export type OpenTerminal_Serialize = {
 	rows: number,
 	/**  Agent CLI id from `list_agents`, started in the new shell. */
 	agent_id: string | null,
+	/**  Chat that owns this shell (its blocks join the chat's timeline). */
+	chat_session_id: SessionId | null,
 	/**  `Channel.toJSON()` of a channel receiving raw output bytes (`ArrayBuffer`). */
 	on_output: string,
 };

@@ -5,7 +5,7 @@ import { applyTheme, type Theme, themeById } from "../features/themes/themes";
 export const DEFAULT_FONT = '"JetBrains Mono Variable", ui-monospace, Menlo, Consolas, monospace';
 
 const defaults: Config = {
-  ui: { theme: "dark", locale: null },
+  ui: { theme: "mono-dark", locale: null },
   terminal: {
     shell: null,
     shell_integration: true,
@@ -20,7 +20,7 @@ const defaults: Config = {
 };
 
 const [config, setConfig] = createSignal<Config>(defaults);
-const [theme, setThemeSignal] = createSignal<Theme>(themeById("dark"));
+const [theme, setThemeSignal] = createSignal<Theme>(themeById("mono-dark"));
 
 export { config, setConfig, theme };
 

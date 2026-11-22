@@ -46,5 +46,17 @@ For a no-key smoke test, run `cargo run -p mock-provider -- tests/fixtures/http/
 - [ ] Esc while a long `bash` runs (e.g. `sleep 60`): the command is killed and the card says cancelled.
 - [ ] `/help`, `/cost`, `/init` (creates AGENTS.md after approval), `/clear` (new chat), `/attach` (attaches the last terminal block).
 - [ ] `@` picker lists project files (not `.env`); the attached file shows collapsed in the message.
-- [ ] Cmd/Ctrl+J toggles the terminal panel; terminals open in the project folder; drag to resize.
 - [ ] Windows: the agent's `bash` runs through PowerShell 7 and `cargo test` works.
+
+## M2c: Unified timeline, Mono
+
+- [ ] `cargo test` in the input box (glyph shows `$`) runs in the chat's shell and becomes a block with exit code, duration and coloured output. A question (glyph `✦`) goes to the agent. After restarting the app, both are still there, in order.
+- [ ] `!make the button blue` runs as a command; `?ls` goes to the agent; Cmd/Ctrl+I locks the mode.
+- [ ] `vim`, `htop` and `less` fill the timeline area and give it back cleanly when they exit.
+- [ ] `read x` accepts typed input in the live block; Ctrl+C (or Stop) ends a running command.
+- [ ] After a failing command, "why did that fail?" carries the block as a chip; × removes it.
+- [ ] Cmd/Ctrl+J shows the classic terminal for the same shell and goes back. Running `claude` from the palette opens it there.
+- [ ] A shell without integration (e.g. `sh`): after about 6 s the chat falls back to the classic terminal, and the status bar says so.
+- [ ] Mono Dark is the default; Mono Light, Nord and the others switch from the palette and also recolour live blocks.
+- [ ] `yes | head -n 2000000` stays responsive and freezes into a block.
+- [ ] Windows (pwsh): blocks, alt-screen (`vim` via WSL or `edit`) and Ctrl+C work.

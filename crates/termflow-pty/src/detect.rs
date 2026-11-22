@@ -66,6 +66,39 @@ fn spec(id: &str, name: &str, program: &Path, args: Vec<String>) -> ShellSpec {
     }
 }
 
+/// Names of every executable on PATH (deduplicated, sorted; `.exe` etc. stripped on Windows).
+/// Used by the input box to tell shell commands from questions for the agent.
+pub fn list_executables() -> Vec<String> {
+    let Some(path) = std::env::var_os("PATH") else {
+        return vec![];
+    };
+    let mut names = std::collections::BTreeSet::new();
+    for dir in std::env::split_paths(&path) {
+        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        for e in rd.flatten() {
+            let p = e.path();
+            if !is_executable(&p) {
+                continue;
+            }
+            let name = p
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let name = if cfg!(windows) {
+                let lower = name.to_lowercase();
+                match lower.rsplit_once('.') {
+                    Some((stem, "exe" | "cmd" | "bat" | "com" | "ps1")) => stem.to_owned(),
+                    _ => continue,
+                }
+            } else {
+                name
+            };
+            names.insert(name);
+        }
+    }
+    names.into_iter().collect()
+}
+
 /// All shells we can find, the default one first.
 pub fn detect_shells() -> Vec<ShellSpec> {
     let mut out = platform::detect();
@@ -193,6 +226,16 @@ mod tests {
         );
         assert_eq!(shell_kind_for("powershell.exe"), ShellKind::PowerShell);
         assert_eq!(shell_kind_for("/opt/x/thing"), ShellKind::Other);
+    }
+
+    #[test]
+    fn lists_executables() {
+        let all = list_executables();
+        assert!(
+            all.iter().any(|n| n == "sh" || n == "cmd" || n == "pwsh"),
+            "{}",
+            all.len()
+        );
     }
 
     #[test]

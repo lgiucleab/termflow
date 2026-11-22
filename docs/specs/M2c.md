@@ -85,3 +85,13 @@ Shell if the first word is a shell builtin (`cd`, `export`, `ls`…), an executa
 - **Biggest UI change so far.** The xterm-per-live-block design keeps memory low, but Claude Code and other inline (non-alt-screen) TUIs need checking. If they misbehave, they open in the raw terminal automatically (planned fallback).
 - **No shell tab-completion in the input box in M2c** (the shell's own completion lives in its line editor, which is hidden). History, file-path completion from the project file list, and the raw terminal cover it for now. Real completion is the v1 "command autocompletion" item.
 - **Auto-detect will sometimes guess wrong.** The glyph shows the choice before Enter, and `!` / `?` / Ctrl+I override it.
+
+## As built
+- **One shell per chat.** It starts lazily the first time the chat is shown, in the project folder (120×24, with the prompt hidden). Blocks carry `chat_session_id` (migration `0005_chat_blocks`), so a chat's past commands come back from the DB after a restart (`chat_blocks`, last 500).
+- **`StreamSplitter`** (`features/chat/splitter.ts`) runs on raw PTY bytes. It strips OSC 133/6973/7, reports marks and alt-screen switches (`?1049/1047/47`), passes every other OSC through, and is safe across chunk boundaries. Tests feed every chunking of the same stream.
+- **Live block:** one xterm per running command, sized to its output (capped at 24 rows). On finish it is frozen to HTML with `serializeAsHTML`, sanitised with DOMPurify, and the xterm is disposed. Alt-screen programs take over the whole timeline area. Known inline TUIs (`claude`, `codex`, `gemini`, `opencode`, `aider`, `copilot`, `top`) open the classic terminal view instead.
+- **Classic terminal** (Cmd/Ctrl+J, or the header's "Terminal" toggle): the same shell, replayed from a 4 MB raw log. If no prompt mark arrives within 6 s, the chat is "degraded" and only this view is used.
+- **Input:** `classify()` uses the PATH executables (`shell_executables`), shell builtins, shell syntax and path-like tokens; `!` forces a command, `?` forces the agent, and Cmd/Ctrl+I or the glyph locks the mode. ↑/↓ history; `/` and `@` menus in agent mode only.
+- **Auto-attach:** up to 5 blocks since the last agent turn, 10 KB each, shown as removable chips.
+- **Removed:** the M1 tab/split workspace and the terminal panel (`features/layout`, `features/terminal/{controller,registry,TerminalPane,BlockHeader}`). Shortcuts are now palette, new chat, terminal, attach last block, next/previous chat.
+- **Not done (moved to later):** separate history per mode, and typing into a running block from the main input. Input to a running command goes into its live block, which has focus.

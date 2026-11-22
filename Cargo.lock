@@ -5436,6 +5436,7 @@ dependencies = [
  "termflow-agent",
  "termflow-config",
  "termflow-core",
+ "termflow-pty",
  "termflow-secrets",
  "termflow-terminal",
  "termflow-types",
