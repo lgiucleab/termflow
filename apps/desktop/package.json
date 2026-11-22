@@ -1,0 +1,13 @@
+{
+  "name": "termflow-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "scripts": {
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.6"
+  },
+  "packageManager": "pnpm@12.9.1"
+}

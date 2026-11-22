@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Config",
+  "type": "object",
+  "properties": {
+    "terminal": {
+      "$ref": "#/$defs/TerminalConfig",
+      "default": {
+        "font_family": null,
+        "font_size": 13,
+        "shell": null
+      }
+    },
+    "ui": {
+      "$ref": "#/$defs/UiConfig",
+      "default": {
+        "locale": null,
+        "theme": "dark"
+      }
+    },
+    "updates": {
+      "$ref": "#/$defs/UpdatesConfig",
+      "default": {
+        "check": true
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "TerminalConfig": {
+      "type": "object",
+      "properties": {
+        "font_family": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "font_size": {
+          "type": "integer",
+          "format": "uint16",
+          "default": 13,
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "shell": {
+          "description": "Shell program. Unset = the user's login shell.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "UiConfig": {
+      "type": "object",
+      "properties": {
+        "locale": {
+          "description": "UI language (`en`, `es-ES`). Unset = follow the OS.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "theme": {
+          "description": "UI theme id.",
+          "type": "string",
+          "default": "dark"
+        }
+      },
+      "additionalProperties": false
+    },
+    "UpdatesConfig": {
+      "type": "object",
+      "properties": {
+        "check": {
+          "description": "Check for updates on startup (the only request made without a configured provider).",
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

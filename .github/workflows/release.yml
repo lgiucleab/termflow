@@ -1,0 +1,19 @@
+name: Release
+
+# Manual only. Signing/notarization steps are present but disabled until we have
+# an Apple Developer ID and a Windows Authenticode certificate (see docs/BUILD_PROMPT.md, M5).
+on:
+  workflow_dispatch:
+
+jobs:
+  release:
+    if: false # enable in M5
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Import Apple signing certificate
+        if: false
+        run: echo "APPLE_CERTIFICATE / APPLE_SIGNING_IDENTITY / APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID"
+      - name: Windows Authenticode signing
+        if: false
+        run: echo "configure bundle.windows.signCommand"
