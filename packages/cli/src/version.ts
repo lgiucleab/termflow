@@ -4,6 +4,7 @@ declare const OPENCODE_VERSION: string
 declare const OPENCODE_CHANNEL: string
 declare const OPENCODE_ARTIFACT: string
 declare const OPENCODE_RELEASE_HIGHLIGHTS: string
+declare const TERMFLOW_ASSET: string
 
 const version = typeof OPENCODE_VERSION === "string" ? OPENCODE_VERSION : "local"
 const channel = typeof OPENCODE_CHANNEL === "string" ? OPENCODE_CHANNEL : "local"
@@ -26,3 +27,8 @@ export {
   highlights as OPENCODE_HIGHLIGHTS,
 }
 export const OPENCODE_LOCAL = channel === "local"
+/** Release archive name without extension, e.g. `termflow-darwin-arm64`; undefined outside compiled release builds. */
+const asset = typeof TERMFLOW_ASSET === "string" ? TERMFLOW_ASSET : undefined
+export { asset as TERMFLOW_ASSET }
+/** GitHub repository whose releases `termflow upgrade` installs. */
+export const TERMFLOW_RELEASE_REPO = "lgiucleab/termflow"

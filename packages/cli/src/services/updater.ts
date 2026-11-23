@@ -1,17 +1,25 @@
 import { Global } from "@opencode/util/global"
 import { AppProcess } from "@opencode/util/process"
 import { EffectFlock } from "@opencode/util/effect-flock"
-import { OPENCODE_ARTIFACT, OPENCODE_CHANNEL, OPENCODE_LOCAL, OPENCODE_VERSION } from "../version"
+import {
+  OPENCODE_ARTIFACT,
+  OPENCODE_CHANNEL,
+  OPENCODE_LOCAL,
+  OPENCODE_VERSION,
+  TERMFLOW_ASSET,
+  TERMFLOW_RELEASE_REPO,
+} from "../version"
 import { Context, Duration, Effect, FileSystem, Layer, Option, Ref, Schema } from "effect"
 import { ChildProcess } from "effect/process"
 import { parse, type ParseError } from "jsonc-parser"
+import { createHash } from "node:crypto"
 import path from "node:path"
 import { stripVTControlCharacters } from "node:util"
 import { RetainedImage } from "./retained-image"
 import { action, parseReleaseVersion, type Policy } from "./updater-action"
 import { errorMessage } from "../util/error"
 
-export const methods = ["curl", "npm", "pnpm", "bun", "yarn", "vp", "brew", "winget"] as const
+export const methods = ["github", "curl", "npm", "pnpm", "bun", "yarn", "vp", "brew", "winget"] as const
 
 export type Method = (typeof methods)[number]
 export type RunResult = { readonly type: "available" | "installed"; readonly version: string }
@@ -44,11 +52,13 @@ export class UpgradeError extends Error {
 const decodeVpPackages = Schema.decodeUnknownOption(
   Schema.fromJsonString(Schema.Array(Schema.Struct({ name: Schema.String }))),
 )
+const decodeReleaseTag = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Struct({ tag_name: Schema.String })))
 const decodeManifestVersion = Schema.decodeUnknownOption(
   Schema.fromJsonString(Schema.Struct({ version: Schema.String })),
 )
 
 const installNames: Record<Method, string> = {
+  github: "The TermFlow GitHub release",
   curl: "The OpenCode installer",
   npm: "npm",
   pnpm: "pnpm",
@@ -252,6 +262,8 @@ const make = Effect.gen(function* () {
   })
 
   const method = Effect.fnUntraced(function* () {
+    // TermFlow release binaries update from the GitHub releases they were downloaded from.
+    if (TERMFLOW_ASSET && !installedPackage && !installedFormula && !installedWinget) return "github"
     if (executable === curlBinary) return "curl"
     if (installedFormula) return "brew"
     if (installedWinget) return "winget"
@@ -286,7 +298,7 @@ const make = Effect.gen(function* () {
 
   const removalCommand = (method: Method) => {
     if (method === "winget") return ["winget", "uninstall", ...wingetArgs]
-    if (method === "curl" || method === "brew" || !installedPackage) return undefined
+    if (method === "github" || method === "curl" || method === "brew" || !installedPackage) return undefined
     const commands = {
       npm: [npm, "uninstall", "--global", ...npmPrefixArgs, installedPackage],
       pnpm: ["pnpm", "remove", "--global", installedPackage],
@@ -398,10 +410,88 @@ const make = Effect.gen(function* () {
     return version
   })
 
+  const githubFailure = (title: string, detail: string, cause?: unknown) =>
+    new UpgradeError(
+      { title, detail, retry: "Check your network, then run termflow upgrade again." },
+      cause === undefined ? undefined : { cause },
+    )
+
+  const download = (url: string, timeout: number) =>
+    Effect.tryPromise({
+      try: async (signal) => {
+        const response = await fetch(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(timeout)]) })
+        if (!response.ok) throw new Error(`${url} returned HTTP ${response.status}`)
+        return new Uint8Array(await response.arrayBuffer())
+      },
+      catch: (cause) => cause,
+    })
+
+  const githubLatest = Effect.fnUntraced(function* () {
+    const title = "Could not check for TermFlow updates"
+    const body = yield* download(`https://api.github.com/repos/${TERMFLOW_RELEASE_REPO}/releases/latest`, 10_000).pipe(
+      Effect.mapError((cause) => githubFailure(title, errorDetail(cause), cause)),
+    )
+    const version = Option.getOrUndefined(decodeReleaseTag(new TextDecoder().decode(body)))?.tag_name.replace(/^v/, "")
+    if (!version || !parseReleaseVersion(version))
+      return yield* Effect.fail(githubFailure(title, "The latest GitHub release has no valid version tag."))
+    return version
+  })
+
+  const githubInstall = Effect.fnUntraced(function* (version: string) {
+    if (!TERMFLOW_ASSET)
+      return yield* Effect.fail(
+        githubFailure("Cannot update this TermFlow build", "Only TermFlow release binaries can update themselves."),
+      )
+    const windows = process.platform === "win32"
+    const file = `${TERMFLOW_ASSET}${windows ? ".zip" : ".tar.gz"}`
+    const base = `https://github.com/${TERMFLOW_RELEASE_REPO}/releases/download/v${version}`
+    const [archive, sums] = yield* Effect.all(
+      [download(`${base}/${file}`, 600_000), download(`${base}/SHA256SUMS.txt`, 30_000)],
+      { concurrency: 2 },
+    ).pipe(Effect.mapError((cause) => githubFailure(`Could not download TermFlow ${version}`, errorDetail(cause), cause)))
+    const expected = new TextDecoder()
+      .decode(sums)
+      .split(/\r?\n/)
+      .map((line) => line.trim().split(/\s+/))
+      .find(([, name]) => name === file)?.[0]
+    if (expected !== createHash("sha256").update(archive).digest("hex"))
+      return yield* Effect.fail(
+        githubFailure(
+          "The TermFlow download failed verification",
+          expected ? `The checksum of ${file} does not match SHA256SUMS.txt.` : `SHA256SUMS.txt has no entry for ${file}.`,
+        ),
+      )
+    yield* fs.makeDirectory(global.cache, { recursive: true })
+    const directory = yield* temporaryDirectory("update-")
+    const archivePath = path.join(directory, file)
+    yield* fs.writeFile(archivePath, archive)
+    // bsdtar (macOS, Windows) unpacks both formats; GNU tar detects gzip on its own.
+    yield* runUpgrade({
+      method: "github",
+      command: ["tar", "-xf", archivePath, "-C", directory],
+      title: "Could not unpack the TermFlow release",
+    })
+    // Stage next to the executable so the final rename stays on one filesystem and replaces it atomically.
+    const staged = `${executable}.new`
+    yield* fs.copyFile(path.join(directory, windows ? "termflow.exe" : "termflow"), staged)
+    yield* fs.chmod(staged, 0o755)
+    if (windows) {
+      // Windows cannot overwrite a running executable, but it can rename it out of the way.
+      const old = `${executable}.old`
+      yield* fs.remove(old, { force: true })
+      yield* fs.rename(executable, old)
+    }
+    yield* fs.rename(staged, executable)
+  })
+
   const latest = (selected?: Method) =>
     (selected ? Effect.succeed(selected) : method()).pipe(
       Effect.flatMap((method) =>
-        method === "winget" ? wingetVersion() : release(method).pipe(Effect.map((data) => data.version)),
+        method === "github"
+          ? githubLatest()
+          : method === "winget"
+            ? wingetVersion()
+            : release(method).pipe(Effect.map((data) => data.version)),
       ),
     )
 
@@ -435,7 +525,9 @@ const make = Effect.gen(function* () {
     if (process.platform !== "win32" || method === "brew") return effect
     // Only the installed binary is at stake; source checkouts run inside bun or node.
     const owned =
-      method === "curl"
+      method === "github"
+        ? TERMFLOW_ASSET !== undefined
+        : method === "curl"
         ? executable === curlBinary
         : method === "winget"
           ? installedWinget
@@ -484,16 +576,18 @@ const make = Effect.gen(function* () {
     if (!parseReleaseVersion(input)) return yield* Effect.fail(new Error(`Invalid version: ${input}`))
     const version = input.trim().replace(/^v/, "")
     const packageName =
-      method === "winget"
-        ? wingetPackage
-        : method === "brew" && installedFormula === "opencode"
-          ? "opencode"
-          : (yield* release(method)).package
+      method === "github"
+        ? "termflow"
+        : method === "winget"
+          ? wingetPackage
+          : method === "brew" && installedFormula === "opencode"
+            ? "opencode"
+            : (yield* release(method)).package
     const target = `${packageName}@${version}`
     if (installedPackage && packageName !== installedPackage && (method === "pnpm" || method === "yarn")) {
       return yield* Effect.fail(new Error(`Reinstall ${target} with ${method} to migrate from ${installedPackage}.`))
     }
-    const commands: Record<Exclude<Method, "bun" | "curl" | "brew" | "winget">, string[]> = {
+    const commands: Record<Exclude<Method, "github" | "bun" | "curl" | "brew" | "winget">, string[]> = {
       // Keep the old package: uninstalling it can unlink the replacement command.
       npm: [
         npm,
@@ -519,6 +613,7 @@ const make = Effect.gen(function* () {
         // Other OpenCode processes may be installing at the same time. Wait longer than the
         // slowest install (curl runs two 5-minute commands).
         yield* flock.acquire("cli-upgrade", undefined, { timeoutMs: Duration.toMillis("15 minutes") })
+        if (method === "github") return yield* retaining(method, githubInstall(version))
         if (method === "bun") {
           // Bun does not prune old versions from its shared package cache.
           yield* fs.makeDirectory(global.cache, { recursive: true })
