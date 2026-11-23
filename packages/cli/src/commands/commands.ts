@@ -70,7 +70,7 @@ const LoginParams = {
 }
 
 const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME : "termflow", {
-  description: "OpenCode command line interface",
+  description: "TermFlow command line interface",
   params: {
     ...ServerParams,
     ...PermissionParams,
