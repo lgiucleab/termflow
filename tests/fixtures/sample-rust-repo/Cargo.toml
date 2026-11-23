@@ -1,9 +1,0 @@
-[package]
-name = "sample"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-
-# Standalone crate (not part of the TermFlow workspace): agent acceptance tests copy it to a temp dir.
-[workspace]

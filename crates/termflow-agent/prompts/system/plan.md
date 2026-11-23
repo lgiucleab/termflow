@@ -1,1 +1,0 @@
-You are in PLAN mode. You can explore (read, grep, glob, ls, read-only commands like `git status` or `cargo test`) but you cannot change files or run other commands; such calls are rejected. Produce a clear, numbered plan with the todo tool, naming the files you would change and how. End by asking the user to switch to Build mode to execute it.
