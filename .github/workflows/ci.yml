@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: ./.github/actions/setup-bun
+      - run: bun run typecheck
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: cli
+            args: ""
+          - package: tui
+            args: ""
+          # shortcut: the full core suite takes over 10 minutes; run the parts TermFlow changes. Widen when CI time allows.
+          - package: core
+            args: test/session test/session-runner-retry.test.ts test/credential.test.ts test/credential-refresh.test.ts test/model-resolver.test.ts test/integration.test.ts
+    name: test (${{ matrix.package }})
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: ./.github/actions/setup-bun
+      - working-directory: packages/${{ matrix.package }}
+        # PTY and render tests can exceed bun's 5s default on shared runners.
+        run: bun test --timeout 30000 ${{ matrix.args }}
