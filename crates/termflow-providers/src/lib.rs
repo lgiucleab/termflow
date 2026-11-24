@@ -1,3 +1,0 @@
-//! Provider adapters: Anthropic, `OpenAI` Responses/Chat, Ollama, ...
-//!
-//! Stub: implemented in M2.

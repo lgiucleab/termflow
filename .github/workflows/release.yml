@@ -1,19 +1,142 @@
-name: Release
+name: release
 
-# Manual only. Signing/notarization steps are present but disabled until we have
-# an Apple Developer ID and a Windows Authenticode certificate (see docs/BUILD_PROMPT.md, M5).
+# Push a tag like v0.1.0 to build the CLI for every platform, publish a GitHub release with the binaries and the
+# install script, then attach desktop installers for macOS (Apple Silicon), Windows (x64) and Linux (x64).
 on:
+  push:
+    tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to (re)build, e.g. v0.1.0
+        required: true
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
 
 jobs:
   release:
-    if: false # enable in M5
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
-      - uses: actions/checkout@v7
-      - name: Import Apple signing certificate
-        if: false
-        run: echo "APPLE_CERTIFICATE / APPLE_SIGNING_IDENTITY / APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID"
-      - name: Windows Authenticode signing
-        if: false
-        run: echo "configure bundle.windows.signCommand"
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: ./.github/actions/setup-bun
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      # Bun cross-compiles every target from this one Linux runner.
+      - name: Build CLI
+        working-directory: packages/cli
+        run: |
+          export OPENCODE_VERSION="${TAG#v}" OPENCODE_CHANNEL=latest
+          bun run script/build.ts
+
+      - name: Package binaries
+        working-directory: packages/cli/dist
+        run: |
+          mkdir -p ../release
+          for dir in cli-*/; do
+            name="termflow-${dir#cli-}"; name="${name%/}"
+            if [ -f "$dir/bin/termflow.exe" ]; then
+              (cd "$dir/bin" && zip -q "../../../release/$name.zip" termflow.exe)
+            else
+              tar -czf "../release/$name.tar.gz" -C "$dir/bin" termflow
+            fi
+          done
+          cd ../release && sha256sum * > SHA256SUMS.txt && cp ../../../install install && ls -lh
+
+      # The desktop jobs bundle the CLI built here instead of building it again. The x64 desktop apps bundle the
+      # baseline build (packages/desktop/script/utils.ts CLI_BINARIES), which runs on CPUs without AVX2.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with: { name: cli-darwin-arm64, path: packages/cli/dist/cli-darwin-arm64, retention-days: 1 }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with: { name: cli-windows-x64-baseline, path: packages/cli/dist/cli-windows-x64-baseline, retention-days: 1 }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with: { name: cli-linux-x64-baseline, path: packages/cli/dist/cli-linux-x64-baseline, retention-days: 1 }
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prerelease=$([[ "$TAG" == *-* ]] && echo --prerelease || true)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" packages/cli/release/* --clobber
+          else
+            gh release create "$TAG" packages/cli/release/* --title "TermFlow $TAG" --generate-notes $prerelease
+          fi
+
+  desktop:
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Unsigned: macOS needs right-click > Open (or xattr -d com.apple.quarantine) on first launch.
+          - target: darwin-arm64
+            cli: cli-darwin-arm64
+            host: macos-latest
+            pack: --mac dmg zip --arm64 -c.mac.identity=null
+          - target: windows-x64
+            cli: cli-windows-x64-baseline
+            host: windows-latest
+            pack: --win nsis --x64
+          - target: linux-x64
+            cli: cli-linux-x64-baseline
+            host: ubuntu-latest
+            pack: --linux AppImage deb --x64
+    name: desktop (${{ matrix.target }})
+    runs-on: ${{ matrix.host }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      OPENCODE_CHANNEL: latest
+      OPENCODE_TARGET: ${{ matrix.target }}
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - run: echo "OPENCODE_VERSION=${TAG#v}" >> "$GITHUB_ENV"
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ matrix.cli }}
+          path: packages/cli/dist/${{ matrix.cli }}
+
+      # Artifacts drop the executable bit.
+      - if: runner.os != 'Windows'
+        run: chmod +x packages/cli/dist/${{ matrix.cli }}/bin/termflow
+
+      - uses: ./.github/actions/setup-bun
+
+      - name: Build app
+        working-directory: packages/desktop
+        run: bun run build
+
+      - name: Package installers
+        working-directory: packages/desktop
+        run: bunx electron-builder ${{ matrix.pack }} --publish never --config electron-builder.config.ts
+
+      - name: Attach to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          files=(packages/desktop/dist/termflow-desktop-*.{dmg,zip,exe,AppImage,deb})
+          [ ${#files[@]} -gt 0 ] || { echo "No installers were built"; exit 1; }
+          ls -lh "${files[@]}"
+          gh release upload "$TAG" "${files[@]}" --clobber

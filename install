@@ -1,0 +1,195 @@
+#!/usr/bin/env bash
+# TermFlow installer: downloads the termflow binary for this machine from GitHub releases.
+#   curl -fsSL https://github.com/lgiucleab/termflow/releases/latest/download/install | bash
+set -euo pipefail
+
+REPO=lgiucleab/termflow
+INSTALL_DIR=${TERMFLOW_INSTALL_DIR:-$HOME/.termflow/bin}
+
+MUTED='\033[0;2m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+usage() {
+    cat <<EOF
+TermFlow Installer
+
+Usage: install [options]
+
+Options:
+    -h, --help              Display this help message
+    -v, --version <version> Install a specific version (e.g. 0.1.2)
+        --no-modify-path    Don't modify shell config files (.zshrc, .bashrc, etc.)
+
+Environment:
+    TERMFLOW_INSTALL_DIR    Install directory (default: ~/.termflow/bin)
+
+Examples:
+    curl -fsSL https://github.com/$REPO/releases/latest/download/install | bash
+    curl -fsSL https://github.com/$REPO/releases/latest/download/install | bash -s -- --version 0.1.2
+EOF
+}
+
+fail() {
+    echo -e "${RED}Error: $1${NC}" >&2
+    exit 1
+}
+
+requested_version=${VERSION:-}
+no_modify_path=false
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help) usage; exit 0 ;;
+        -v|--version)
+            [[ -n "${2:-}" ]] || fail "--version requires a version argument"
+            requested_version="${2#v}"
+            shift 2
+            ;;
+        --no-modify-path) no_modify_path=true; shift ;;
+        *) echo -e "${MUTED}Warning: unknown option '$1'${NC}" >&2; shift ;;
+    esac
+done
+
+# Platform detection matches the release asset names: termflow-<os>-<arch>[-baseline][-musl].
+raw_os=$(uname -s)
+case "$raw_os" in
+    Darwin*) os=darwin ;;
+    Linux*) os=linux ;;
+    MINGW*|MSYS*|CYGWIN*) os=windows ;;
+    *) fail "Unsupported OS: $raw_os" ;;
+esac
+
+arch=$(uname -m)
+case "$arch" in
+    aarch64|arm64) arch=arm64 ;;
+    x86_64|amd64) arch=x64 ;;
+    *) fail "Unsupported architecture: $arch" ;;
+esac
+
+# A shell under Rosetta reports x64 on Apple Silicon; install the native build.
+if [ "$os" = darwin ] && [ "$arch" = x64 ] && [ "$(sysctl -n sysctl.proc_translated 2>/dev/null || echo 0)" = 1 ]; then
+    arch=arm64
+fi
+# Git Bash runs emulated x64 on Windows ARM64; the host CPU shows in uname -s and PROCESSOR_IDENTIFIER.
+if [ "$os" = windows ] && [ "$arch" = x64 ] && [[ "$raw_os" == *-ARM64 || "${PROCESSOR_IDENTIFIER:-}" == ARM* ]]; then
+    arch=arm64
+fi
+
+is_musl=false
+if [ "$os" = linux ]; then
+    if [ -f /etc/alpine-release ] || (command -v ldd >/dev/null 2>&1 && ldd --version 2>&1 | grep -qi musl); then
+        is_musl=true
+    fi
+fi
+
+needs_baseline=false
+if [ "$arch" = x64 ]; then
+    case "$os" in
+        linux) grep -qwi avx2 /proc/cpuinfo 2>/dev/null || needs_baseline=true ;;
+        darwin) [ "$(sysctl -n hw.optional.avx2_0 2>/dev/null || echo 0)" = 1 ] || needs_baseline=true ;;
+        windows)
+            ps='(Add-Type -MemberDefinition "[DllImport(""kernel32.dll"")] public static extern bool IsProcessorFeaturePresent(int ProcessorFeature);" -Name Kernel32 -Namespace Win32 -PassThru)::IsProcessorFeaturePresent(40)'
+            out=$(powershell.exe -NoProfile -NonInteractive -Command "$ps" 2>/dev/null | tr -d '\r[:space:]' | tr '[:upper:]' '[:lower:]' || true)
+            [ "$out" = true ] || needs_baseline=true
+            ;;
+    esac
+fi
+
+asset="termflow-$os-$arch"
+[ "$needs_baseline" = true ] && asset="$asset-baseline"
+[ "$is_musl" = true ] && asset="$asset-musl"
+if [ "$os" = windows ]; then
+    file="$asset.zip"
+    binary=termflow.exe
+    command -v unzip >/dev/null 2>&1 || fail "'unzip' is required but not installed."
+else
+    file="$asset.tar.gz"
+    binary=termflow
+    command -v tar >/dev/null 2>&1 || fail "'tar' is required but not installed."
+fi
+
+if [ -n "$requested_version" ]; then
+    base="https://github.com/$REPO/releases/download/v$requested_version"
+    label="$requested_version"
+else
+    base="https://github.com/$REPO/releases/latest/download"
+    label="latest"
+fi
+
+tmp_dir=$(mktemp -d)
+trap 'rm -rf "$tmp_dir"' EXIT
+
+echo -e "${MUTED}Installing ${NC}termflow ${MUTED}($label, $asset)${NC}"
+curl -fL --progress-bar -o "$tmp_dir/$file" "$base/$file" ||
+    fail "Could not download $file. See https://github.com/$REPO/releases for available versions."
+curl -fsSL -o "$tmp_dir/SHA256SUMS.txt" "$base/SHA256SUMS.txt" || fail "Could not download SHA256SUMS.txt."
+
+expected=$(awk -v f="$file" '$2 == f { print $1 }' "$tmp_dir/SHA256SUMS.txt")
+[ -n "$expected" ] || fail "SHA256SUMS.txt has no entry for $file."
+if command -v sha256sum >/dev/null 2>&1; then
+    actual=$(sha256sum "$tmp_dir/$file" | awk '{ print $1 }')
+else
+    actual=$(shasum -a 256 "$tmp_dir/$file" | awk '{ print $1 }')
+fi
+[ "$actual" = "$expected" ] || fail "Checksum mismatch for $file; the download may be corrupted."
+
+if [ "$os" = windows ]; then
+    unzip -q "$tmp_dir/$file" -d "$tmp_dir"
+else
+    tar -xzf "$tmp_dir/$file" -C "$tmp_dir"
+fi
+
+mkdir -p "$INSTALL_DIR"
+mv "$tmp_dir/$binary" "$INSTALL_DIR/$binary"
+chmod 755 "$INSTALL_DIR/$binary"
+installed=$("$INSTALL_DIR/$binary" --version 2>/dev/null || echo termflow)
+echo -e "${MUTED}Installed ${NC}$installed ${MUTED}to $INSTALL_DIR${NC}"
+
+path_added=false
+add_to_path() {
+    local config_file=$1 line=$2
+    if grep -Fxq "$line" "$config_file" 2>/dev/null; then
+        return
+    elif [[ -w $config_file ]]; then
+        printf '\n# termflow\n%s\n' "$line" >> "$config_file"
+        path_added=true
+        echo -e "${MUTED}Added ${NC}$INSTALL_DIR ${MUTED}to PATH in ${NC}$config_file"
+    else
+        echo -e "${MUTED}Add this to $config_file (or similar):${NC} $line"
+    fi
+}
+
+if [[ "$no_modify_path" != true && ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+    XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
+    current_shell=$(basename "${SHELL:-bash}")
+    case $current_shell in
+        fish) config_files="$XDG_CONFIG_HOME/fish/config.fish"; line="fish_add_path $INSTALL_DIR" ;;
+        zsh) config_files="${ZDOTDIR:-$HOME}/.zshrc ${ZDOTDIR:-$HOME}/.zshenv"; line="export PATH=$INSTALL_DIR:\$PATH" ;;
+        bash) config_files="$HOME/.bashrc $HOME/.bash_profile $HOME/.profile"; line="export PATH=$INSTALL_DIR:\$PATH" ;;
+        *) config_files="$HOME/.profile"; line="export PATH=$INSTALL_DIR:\$PATH" ;;
+    esac
+    config_file=""
+    for candidate in $config_files; do
+        if [[ -f $candidate ]]; then config_file=$candidate; break; fi
+    done
+    # A new Mac has no ~/.zshrc; create the shell's main config rather than leave termflow off PATH.
+    if [[ -z $config_file ]]; then
+        config_file=${config_files%% *}
+        mkdir -p "$(dirname "$config_file")" && touch "$config_file" 2>/dev/null || config_file=""
+    fi
+    if [[ -n $config_file ]]; then
+        add_to_path "$config_file" "$line"
+    else
+        echo -e "${MUTED}Add $INSTALL_DIR to your PATH:${NC} $line"
+    fi
+fi
+
+if [ "${GITHUB_ACTIONS:-}" = true ]; then
+    echo "$INSTALL_DIR" >> "$GITHUB_PATH"
+fi
+
+echo ""
+[ "$path_added" = true ] && echo -e "exec \$SHELL   ${MUTED}# Reload PATH (or open a new terminal)${NC}"
+echo -e "cd <project>  ${MUTED}# Open a project${NC}"
+echo -e "termflow      ${MUTED}# Start TermFlow${NC}"
+echo ""
